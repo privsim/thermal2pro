@@ -1,7 +1,7 @@
 import cairo
 import numpy as np
-from typing import Dict
-import weakref
+from typing import Dict, Optional
+import gc
 
 class CairoSurfaceHandler:
     # Class-level storage for data references
@@ -9,7 +9,8 @@ class CairoSurfaceHandler:
     
     @staticmethod
     def create_surface_from_frame(frame):
-        if frame is None or not isinstance(frame, np.ndarray):
+        """Create a Cairo surface from a numpy array frame."""
+        if frame is None or not isinstance(frame, np.ndarray) or len(frame.shape) < 2:
             raise ValueError("Invalid frame")
             
         height, width = frame.shape[:2]
@@ -31,21 +32,26 @@ class CairoSurfaceHandler:
         )
         
         # Store reference in class dict using surface address as key
-        CairoSurfaceHandler._data_refs[id(surface)] = frame_copy
+        surface_id = id(surface)
+        CairoSurfaceHandler._data_refs[surface_id] = frame_copy
         
-        # Create finalizer to clean up reference when surface is destroyed
-        weakref.finalize(surface, CairoSurfaceHandler._cleanup_ref, id(surface))
-        
-        return surface
+        # Return a wrapped surface that will handle cleanup
+        return _ManagedCairoSurface(surface, surface_id)
     
     @staticmethod
     def _cleanup_ref(surface_id):
+        """Clean up the data reference for a given surface ID."""
         CairoSurfaceHandler._data_refs.pop(surface_id, None)
         
     @staticmethod
     def scale_and_center(ctx, surface, target_width, target_height):
+        """Scale and center a surface in the given context."""
         if surface is None:
             return
+            
+        # If we have a managed surface, get the underlying cairo surface
+        if isinstance(surface, _ManagedCairoSurface):
+            surface = surface.surface
             
         scale = min(target_width / surface.get_width(),
                    target_height / surface.get_height())
@@ -62,3 +68,23 @@ class CairoSurfaceHandler:
         ctx.set_source_surface(surface, 0, 0)
         ctx.paint()
         ctx.restore()
+
+class _ManagedCairoSurface:
+    """A wrapper for cairo.ImageSurface that handles cleanup of numpy array data."""
+    
+    def __init__(self, surface: cairo.ImageSurface, surface_id: int):
+        self.surface = surface
+        self.surface_id = surface_id
+        
+    def __del__(self):
+        """Clean up when the surface is garbage collected."""
+        CairoSurfaceHandler._cleanup_ref(self.surface_id)
+        
+    def get_width(self):
+        return self.surface.get_width()
+        
+    def get_height(self):
+        return self.surface.get_height()
+        
+    def get_data(self):
+        return self.surface.get_data()
