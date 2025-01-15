@@ -12,6 +12,7 @@ from datetime import datetime
 import cairo
 from pathlib import Path
 from thermal2pro.ui.cairo_handler import CairoSurfaceHandler
+from thermal2pro.ui.live_view import LiveViewHandler
 
 class ThermalWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
@@ -80,6 +81,16 @@ class ThermalWindow(Gtk.ApplicationWindow):
         else:
             button_bar.pack_start(self.palette_dropdown, True, True, 0)
 
+        # Performance metrics toggle button
+        metrics_button = Gtk.Button(label="Metrics")
+        metrics_button.connect("clicked", self.toggle_metrics)
+        metrics_button.set_vexpand(False)
+        metrics_button.set_hexpand(False)
+        if Gtk._version == "4.0":
+            button_bar.append(metrics_button)
+        else:
+            button_bar.pack_start(metrics_button, False, False, 0)
+
         if Gtk._version == "4.0":
             self.box.append(button_bar)
         else:
@@ -92,6 +103,9 @@ class ThermalWindow(Gtk.ApplicationWindow):
                 raise RuntimeError("Failed to open camera")
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
+            # Set camera properties for better performance
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffering
+            self.cap.set(cv2.CAP_PROP_FPS, 30)  # Target 30 FPS
         except Exception as e:
             print(f"Error initializing camera: {e}")
             print("Check if the camera is connected and you have permission to access it")
@@ -100,18 +114,26 @@ class ThermalWindow(Gtk.ApplicationWindow):
 
         self.current_palette = cv2.COLORMAP_JET
         self.current_frame = None
+        self.live_view = LiveViewHandler(buffer_size=5)  # 5 frame buffer
+        self.show_metrics = False
 
-        # Update frame every 40ms (25 FPS)
-        GLib.timeout_add(40, self.update_frame)
+        # Update frame every 16ms (targeting 60 FPS max)
+        GLib.timeout_add(16, self.update_frame)
 
     def update_frame(self):
         try:
             ret, frame = self.cap.read()
             if ret:
+                # Convert to grayscale and apply color palette
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 colored = cv2.applyColorMap(gray, self.current_palette)
-                self.current_frame = cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)
-                self.drawing_area.queue_draw()
+                rgb_frame = cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)
+                
+                # Process frame through live view handler
+                processed_frame, _ = self.live_view.process_frame(rgb_frame)
+                if processed_frame is not None:
+                    self.current_frame = processed_frame
+                    self.drawing_area.queue_draw()
             return True
         except Exception as e:
             print(f"Error updating frame: {e}")
@@ -124,6 +146,9 @@ class ThermalWindow(Gtk.ApplicationWindow):
         try:
             surface = CairoSurfaceHandler.create_surface_from_frame(self.current_frame)
             CairoSurfaceHandler.scale_and_center(ctx, surface, width, height)
+            
+            if self.show_metrics:
+                self.draw_metrics_overlay(ctx, width, height)
         except Exception as e:
             print(f"Error drawing frame: {e}")
             return False
@@ -131,6 +156,34 @@ class ThermalWindow(Gtk.ApplicationWindow):
     def draw_frame_gtk3(self, widget, ctx):
         return self.draw_frame(widget, ctx, widget.get_allocated_width(), 
                              widget.get_allocated_height())
+
+    def draw_metrics_overlay(self, ctx, width, height):
+        """Draw performance metrics overlay."""
+        metrics = self.live_view.get_metrics()
+        
+        # Setup overlay style
+        ctx.save()
+        ctx.set_source_rgba(0, 0, 0, 0.7)  # Semi-transparent black background
+        ctx.rectangle(10, 10, 200, 90)
+        ctx.fill()
+        
+        ctx.set_source_rgb(1, 1, 1)  # White text
+        ctx.select_font_face("monospace")
+        ctx.set_font_size(14)
+        
+        # Draw metrics
+        y = 30
+        for label, value in [
+            ("FPS", f"{metrics.fps:.1f}"),
+            ("Frame Time", f"{metrics.frame_time*1000:.1f}ms"),
+            ("Dropped Frames", str(metrics.dropped_frames)),
+            ("Buffer Usage", f"{metrics.buffer_usage*100:.0f}%")
+        ]:
+            ctx.move_to(20, y)
+            ctx.show_text(f"{label}: {value}")
+            y += 20
+            
+        ctx.restore()
 
     def capture_image(self, button):
         if self.current_frame is not None:
@@ -160,7 +213,14 @@ class ThermalWindow(Gtk.ApplicationWindow):
             selected = dropdown.get_active()
         self.current_palette = palette_map[selected]
 
+    def toggle_metrics(self, button):
+        """Toggle performance metrics overlay."""
+        self.show_metrics = not self.show_metrics
+        self.drawing_area.queue_draw()
+
     def do_close_request(self):
+        """Clean up resources when window is closed."""
         if self.cap is not None:
             self.cap.release()
+        self.live_view.clear_buffer()
         return False
