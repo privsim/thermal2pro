@@ -153,3 +153,34 @@ def test_scale_and_center_smaller_target():
     
     # Test scaling down
     CairoSurfaceHandler.scale_and_center(ctx, surface, 200, 150)
+
+def test_scale_and_center_edge_cases():
+    # Create a test surface
+    frame = np.zeros((100, 200, 3), dtype=np.uint8)
+    surface = CairoSurfaceHandler.create_surface_from_frame(frame)
+    target_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 400, 300)
+    ctx = cairo.Context(target_surface)
+    
+    # Test with zero dimensions (should handle gracefully)
+    CairoSurfaceHandler.scale_and_center(ctx, surface, 0, 300)
+    CairoSurfaceHandler.scale_and_center(ctx, surface, 400, 0)
+    CairoSurfaceHandler.scale_and_center(ctx, surface, 0, 0)
+    
+    # Test with very small dimensions
+    CairoSurfaceHandler.scale_and_center(ctx, surface, 1, 1)
+    
+    # Test with very large dimensions
+    CairoSurfaceHandler.scale_and_center(ctx, surface, 1000000, 1000000)
+
+def test_scale_and_center_invalid_matrix():
+    # Create a test surface
+    frame = np.zeros((100, 200, 3), dtype=np.uint8)
+    surface = CairoSurfaceHandler.create_surface_from_frame(frame)
+    target_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 400, 300)
+    ctx = cairo.Context(target_surface)
+    
+    # Test with dimensions that could cause matrix issues
+    CairoSurfaceHandler.scale_and_center(ctx, surface, float('inf'), 300)
+    CairoSurfaceHandler.scale_and_center(ctx, surface, 400, float('inf'))
+    CairoSurfaceHandler.scale_and_center(ctx, surface, float('nan'), 300)
+    CairoSurfaceHandler.scale_and_center(ctx, surface, 400, float('nan'))

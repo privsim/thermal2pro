@@ -2,6 +2,7 @@ import cairo
 import numpy as np
 from typing import Dict, Optional
 import gc
+import math
 
 class CairoSurfaceHandler:
     # Class-level storage for data references
@@ -46,28 +47,58 @@ class CairoSurfaceHandler:
     @staticmethod
     def scale_and_center(ctx, surface, target_width, target_height):
         """Scale and center a surface in the given context."""
-        if surface is None:
+        if surface is None or target_width <= 0 or target_height <= 0:
             return
             
         # If we have a managed surface, get the underlying cairo surface
         if isinstance(surface, _ManagedCairoSurface):
             surface = surface.surface
             
-        scale = min(target_width / surface.get_width(),
-                   target_height / surface.get_height())
-                   
-        new_width = int(surface.get_width() * scale)
-        new_height = int(surface.get_height() * scale)
+        surface_width = surface.get_width()
+        surface_height = surface.get_height()
         
-        x_offset = (target_width - new_width) // 2
-        y_offset = (target_height - new_height) // 2
-        
-        ctx.save()
-        ctx.translate(x_offset, y_offset)
-        ctx.scale(scale, scale)
-        ctx.set_source_surface(surface, 0, 0)
-        ctx.paint()
-        ctx.restore()
+        if surface_width <= 0 or surface_height <= 0:
+            return
+            
+        # Handle infinite or NaN values
+        if not (math.isfinite(target_width) and math.isfinite(target_height)):
+            return
+            
+        try:
+            # Calculate scale while preserving aspect ratio
+            scale_x = target_width / surface_width
+            scale_y = target_height / surface_height
+            scale = min(scale_x, scale_y)
+            
+            # Ensure scale is valid and finite
+            if not math.isfinite(scale) or scale <= 0:
+                return
+                       
+            new_width = int(surface_width * scale)
+            new_height = int(surface_height * scale)
+            
+            # Calculate centering offsets
+            x_offset = int((target_width - new_width) / 2)
+            y_offset = int((target_height - new_height) / 2)
+            
+            # Ensure offsets are valid
+            if not (math.isfinite(x_offset) and math.isfinite(y_offset)):
+                return
+            
+            # Ensure values are within reasonable bounds to prevent overflow
+            if any(abs(v) > 1e6 for v in [new_width, new_height, x_offset, y_offset, scale]):
+                return
+            
+            ctx.save()
+            ctx.translate(x_offset, y_offset)
+            ctx.scale(scale, scale)
+            ctx.set_source_surface(surface, 0, 0)
+            ctx.paint()
+            ctx.restore()
+        except (cairo.Error, OverflowError, ValueError) as e:
+            print(f"Cairo error during drawing: {e}")
+            # Restore context state even if painting fails
+            ctx.restore()
 
 class _ManagedCairoSurface:
     """A wrapper for cairo.ImageSurface that handles cleanup of numpy array data."""
