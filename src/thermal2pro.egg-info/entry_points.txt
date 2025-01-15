@@ -1,0 +1,2 @@
+[console_scripts]
+thermal2pro = thermal2pro.main:main

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thermal2pro"
+version = "0.1.0"
+description = "Thermal imaging application for P2 Pro camera"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.26.0",
+    "opencv-python-headless>=4.8.0",
+    "Pillow>=10.0.0",
+    "pycairo>=1.24.0",
+    "PyGObject>=3.42.0",
+]
+
+[project.scripts]
+thermal2pro = "thermal2pro.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+[tool.setuptools]
+package-dir = {"" = "src"}

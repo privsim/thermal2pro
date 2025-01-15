@@ -1,0 +1,17 @@
+[Unit]
+Description=Thermal2Pro Camera Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+Environment=GTK_A11Y=none
+WorkingDirectory=/home/pi/2pro
+ExecStart=/home/pi/2pro/thermalenv/bin/python -m thermal2pro.main
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

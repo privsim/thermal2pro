@@ -1,0 +1,5 @@
+thermalenv
+venv
+.venv
+**/__pycache__/*
+.pytest**
