@@ -1,0 +1,45 @@
+{
+  "framework": "pytest",
+  "tests": [
+    {
+      "name": "test_cleanup",
+      "passed": true,
+      "output": []
+    },
+    {
+      "name": "test_frame_capture",
+      "passed": true,
+      "output": []
+    },
+    {
+      "name": "test_frame_processing",
+      "passed": true,
+      "output": []
+    },
+    {
+      "name": "test_frame_saving",
+      "passed": true,
+      "output": []
+    },
+    {
+      "name": "test_initialization",
+      "passed": true,
+      "output": []
+    },
+    {
+      "name": "test_colormap_application",
+      "passed": true,
+      "output": []
+    },
+    {
+      "name": "test_frame_conversion",
+      "passed": true,
+      "output": []
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0
+  }
+}

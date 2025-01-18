@@ -11,21 +11,27 @@ import numpy as np
 from datetime import datetime
 import cairo
 from pathlib import Path
+import logging
 from thermal2pro.ui.cairo_handler import CairoSurfaceHandler
 from thermal2pro.ui.live_view import LiveViewHandler
+from thermal2pro.camera.mock_camera import MockThermalCamera
+
+logger = logging.getLogger(__name__)
 
 class ThermalWindow(Gtk.ApplicationWindow):
-    def __init__(self, app):
+    def __init__(self, app, use_mock_camera=False):
         super().__init__(application=app)
         self.set_title("P2 Pro Thermal")
-        self.fullscreen()
+        
+        # Set default window size instead of fullscreen
+        self.set_default_size(800, 600)
+        self.set_position(Gtk.WindowPosition.CENTER)
 
         # Main vertical box
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         if Gtk._version == "4.0":
-            self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             self.set_child(self.box)
         else:
-            self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             self.add(self.box)
 
         # Camera view area
@@ -34,7 +40,12 @@ class ThermalWindow(Gtk.ApplicationWindow):
             self.drawing_area.set_draw_func(self.draw_frame)
         else:
             self.drawing_area.connect("draw", self.draw_frame_gtk3)
-        self.box.append(self.drawing_area)
+        
+        # Add drawing area to box
+        if Gtk._version == "4.0":
+            self.box.append(self.drawing_area)
+        else:
+            self.box.pack_start(self.drawing_area, True, True, 0)
 
         # Button bar at bottom
         button_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -91,34 +102,46 @@ class ThermalWindow(Gtk.ApplicationWindow):
         else:
             button_bar.pack_start(metrics_button, False, False, 0)
 
+        # Add button bar to main box
         if Gtk._version == "4.0":
             self.box.append(button_bar)
         else:
             self.box.pack_start(button_bar, False, False, 0)
 
         # Initialize camera
+        self.cap = None
         try:
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
-                raise RuntimeError("Failed to open camera")
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
-            # Set camera properties for better performance
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffering
-            self.cap.set(cv2.CAP_PROP_FPS, 30)  # Target 30 FPS
+            if use_mock_camera:
+                logger.info("Using mock camera")
+                self.cap = MockThermalCamera()
+            else:
+                logger.info("Attempting to initialize real camera")
+                self.cap = cv2.VideoCapture(0)
+                if not self.cap.isOpened():
+                    raise RuntimeError("Failed to open camera")
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                self.cap.set(cv2.CAP_PROP_FPS, 30)
+            
+            if not self.cap or not self.cap.isOpened():
+                logger.warning("Real camera not available, falling back to mock camera")
+                self.cap = MockThermalCamera()
+            
+            logger.info("Camera initialized successfully")
+            
         except Exception as e:
-            print(f"Error initializing camera: {e}")
-            print("Check if the camera is connected and you have permission to access it")
-            print("You might need: sudo usermod -a -G video $USER")
-            sys.exit(1)
+            logger.warning(f"Camera initialization failed: {e}, falling back to mock camera")
+            self.cap = MockThermalCamera()
 
         self.current_palette = cv2.COLORMAP_JET
         self.current_frame = None
-        self.live_view = LiveViewHandler(buffer_size=5)  # 5 frame buffer
+        self.live_view = LiveViewHandler(buffer_size=5)
         self.show_metrics = False
 
         # Update frame every 16ms (targeting 60 FPS max)
         GLib.timeout_add(16, self.update_frame)
+        logger.info("Window initialization complete")
 
     def update_frame(self):
         try:
@@ -136,7 +159,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
                     self.drawing_area.queue_draw()
             return True
         except Exception as e:
-            print(f"Error updating frame: {e}")
+            logger.error(f"Error updating frame: {e}")
             return False
 
     def draw_frame(self, area, ctx, width, height):
@@ -150,7 +173,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
             if self.show_metrics:
                 self.draw_metrics_overlay(ctx, width, height)
         except Exception as e:
-            print(f"Error drawing frame: {e}")
+            logger.error(f"Error drawing frame: {e}")
             return False
 
     def draw_frame_gtk3(self, widget, ctx):
@@ -197,9 +220,9 @@ class ThermalWindow(Gtk.ApplicationWindow):
             try:
                 cv2.imwrite(str(filepath),
                            cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2BGR))
-                print(f"Captured: {filepath}")
+                logger.info(f"Captured: {filepath}")
             except Exception as e:
-                print(f"Error saving capture: {e}")
+                logger.error(f"Error saving capture: {e}")
 
     def change_palette(self, dropdown, *args):
         palette_map = {
@@ -212,15 +235,18 @@ class ThermalWindow(Gtk.ApplicationWindow):
         else:
             selected = dropdown.get_active()
         self.current_palette = palette_map[selected]
+        logger.debug(f"Palette changed to: {selected}")
 
     def toggle_metrics(self, button):
         """Toggle performance metrics overlay."""
         self.show_metrics = not self.show_metrics
         self.drawing_area.queue_draw()
+        logger.debug(f"Metrics display toggled: {self.show_metrics}")
 
     def do_close_request(self):
         """Clean up resources when window is closed."""
         if self.cap is not None:
             self.cap.release()
         self.live_view.clear_buffer()
+        logger.info("Window resources cleaned up")
         return False
