@@ -40,8 +40,15 @@ class LiveViewMode(BaseMode):
     
     def create_controls(self):
         """Create live view controls."""
-        self.controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.controls_box.set_spacing(10)
+        self.controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.controls_box.set_margin_top(5)
+        self.controls_box.set_margin_bottom(5)
+        if Gtk._version.startswith('4'):
+            self.controls_box.set_margin_start(5)
+            self.controls_box.set_margin_end(5)
+        else:
+            self.controls_box.set_margin_left(5)
+            self.controls_box.set_margin_right(5)
         
         # Palette selector
         if Gtk._version.startswith('4'):
@@ -62,21 +69,38 @@ class LiveViewMode(BaseMode):
             # Set initial selection to Rainbow
             self.palette_dropdown.set_active(1)
         
+        # Enable input handling for dropdown
+        self.palette_dropdown.set_can_focus(True)
+        if not Gtk._version.startswith('4'):
+            self.palette_dropdown.set_can_default(True)
+        
         self.palette_dropdown.connect("changed" if Gtk._version.startswith('3') else "notify::selected", 
                                     self.on_palette_changed)
         
+        # Make dropdown larger and more touch-friendly
+        self.palette_dropdown.set_size_request(120, 40)
+        
         # FPS toggle button
         self.fps_button = Gtk.ToggleButton(label="FPS")
+        self.fps_button.set_can_focus(True)
+        if not Gtk._version.startswith('4'):
+            self.fps_button.set_can_default(True)
         self.fps_button.set_active(self.fps_overlay)
         self.fps_button.connect("toggled", self.on_fps_toggled)
         
-        # Add controls to box
+        # Make button larger and more touch-friendly
+        self.fps_button.set_size_request(80, 40)
+        
+        # Add controls to box with proper spacing
         if Gtk._version.startswith('4'):
             self.controls_box.append(self.palette_dropdown)
             self.controls_box.append(self.fps_button)
         else:
-            self.controls_box.pack_start(self.palette_dropdown, True, True, 0)
-            self.controls_box.pack_start(self.fps_button, False, False, 0)
+            self.controls_box.pack_start(self.palette_dropdown, True, True, 5)
+            self.controls_box.pack_start(self.fps_button, False, False, 5)
+        
+        # Show all controls
+        self.controls_box.show_all()
     
     def process_frame(self, frame):
         """Process camera frame.

@@ -43,10 +43,16 @@ class ThermalWindow(Gtk.ApplicationWindow):
                 self.move(x, y)
 
         # Main vertical box
-        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        self.box.set_margin_top(5)
+        self.box.set_margin_bottom(5)
         if Gtk._version.startswith('4'):
+            self.box.set_margin_start(5)
+            self.box.set_margin_end(5)
             self.set_child(self.box)
         else:
+            self.box.set_margin_left(5)
+            self.box.set_margin_right(5)
             self.add(self.box)
 
         # Camera view area
@@ -69,22 +75,26 @@ class ThermalWindow(Gtk.ApplicationWindow):
             self.box.pack_start(self.drawing_area, True, True, 0)
 
         # Mode selector bar
-        mode_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        mode_bar.set_spacing(5)
+        mode_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        mode_bar.set_margin_bottom(5)
         if Gtk._version.startswith('4'):
             mode_bar.set_margin_start(5)
             mode_bar.set_margin_end(5)
-            mode_bar.set_margin_top(5)
         else:
             mode_bar.set_margin_left(5)
             mode_bar.set_margin_right(5)
-            mode_bar.set_margin_top(5)
 
         # Create mode buttons
         self.mode_buttons = {}
         for mode in AppMode:
             button = Gtk.ToggleButton(label=mode.name.replace('_', ' '))
+            button.set_can_focus(True)  # Enable keyboard focus
+            button.set_focus_on_click(True)  # Focus when clicked
+            if not Gtk._version.startswith('4'):
+                button.set_can_default(True)  # Enable default button state
             button.connect('toggled', self.on_mode_button_toggled, mode)
+            # Make buttons larger and more touch-friendly
+            button.set_size_request(100, 40)
             if Gtk._version.startswith('4'):
                 mode_bar.append(button)
             else:
@@ -98,16 +108,15 @@ class ThermalWindow(Gtk.ApplicationWindow):
             self.box.pack_start(mode_bar, False, False, 0)
 
         # Controls container
-        self.controls_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.controls_container.set_spacing(10)
+        self.controls_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.controls_container.set_margin_top(5)
+        self.controls_container.set_margin_bottom(5)
         if Gtk._version.startswith('4'):
-            self.controls_container.set_margin_start(10)
-            self.controls_container.set_margin_end(10)
-            self.controls_container.set_margin_bottom(10)
+            self.controls_container.set_margin_start(5)
+            self.controls_container.set_margin_end(5)
         else:
-            self.controls_container.set_margin_left(10)
-            self.controls_container.set_margin_right(10)
-            self.controls_container.set_margin_bottom(10)
+            self.controls_container.set_margin_left(5)
+            self.controls_container.set_margin_right(5)
 
         # Add controls container to main box
         if Gtk._version.startswith('4'):
@@ -150,6 +159,17 @@ class ThermalWindow(Gtk.ApplicationWindow):
             # Other modes will be added as they're implemented
         }
         self.current_mode = None
+
+        # Enable touch events
+        if Gtk._version.startswith('4'):
+            self.set_receives_default(True)
+        else:
+            events = Gdk.EventMask.BUTTON_PRESS_MASK | \
+                    Gdk.EventMask.BUTTON_RELEASE_MASK | \
+                    Gdk.EventMask.POINTER_MOTION_MASK | \
+                    Gdk.EventMask.TOUCH_MASK
+            self.add_events(events)
+            self.set_can_focus(True)
 
         # Start in live view mode
         self.switch_mode(AppMode.LIVE_VIEW)
