@@ -24,18 +24,8 @@ class ThermalWindow(Gtk.ApplicationWindow):
         super().__init__(application=app)
         self.set_title("P2 Pro Thermal")
         
-        # Set default window size and position
+        # Set default window size
         self.set_default_size(800, 600)
-        
-        # Center window on screen
-        display = Gdk.Display.get_default()
-        if display:
-            monitor = display.get_monitor_at_surface(self.get_surface())
-            if monitor:
-                geometry = monitor.get_geometry()
-                x = (geometry.width - 800) // 2
-                y = (geometry.height - 600) // 2
-                self.move(x, y)
 
         # Main vertical box
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
@@ -133,6 +123,16 @@ class ThermalWindow(Gtk.ApplicationWindow):
 
         # Show all widgets
         self.show()
+
+        # Center window after showing
+        display = self.get_display()
+        if display:
+            monitor = display.get_monitor_at_window(self)
+            if monitor:
+                geometry = monitor.get_geometry()
+                x = (geometry.width - 800) // 2
+                y = (geometry.height - 600) // 2
+                self.move(x, y)
 
         # Update frame every 16ms (targeting 60 FPS max)
         GLib.timeout_add(16, self.update_frame)
