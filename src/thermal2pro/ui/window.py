@@ -127,11 +127,14 @@ class ThermalWindow(Gtk.ApplicationWindow):
         # Center window after showing
         display = self.get_display()
         if display:
-            monitor = display.get_monitor_at_window(self)
-            if monitor:
-                geometry = monitor.get_geometry()
-                x = (geometry.width - 800) // 2
-                y = (geometry.height - 600) // 2
+            # Get primary monitor
+            monitors = display.get_monitors()
+            if monitors:
+                monitor = monitors[0]  # Use primary monitor
+                rect = monitor.get_geometry()
+                x = (rect.width - 800) // 2
+                y = (rect.height - 600) // 2
+                self.set_default_size(800, 600)
                 self.move(x, y)
 
         # Update frame every 16ms (targeting 60 FPS max)
