@@ -51,6 +51,12 @@ class ThermalWindow(Gtk.ApplicationWindow):
 
         # Camera view area
         self.drawing_area = Gtk.DrawingArea()
+        # Set minimum size to ensure proper rendering
+        self.drawing_area.set_size_request(256, 192)
+        # Set expand to fill available space
+        self.drawing_area.set_vexpand(True)
+        self.drawing_area.set_hexpand(True)
+        
         if Gtk._version.startswith('4'):
             self.drawing_area.set_draw_func(self.draw_frame)
         else:
@@ -135,6 +141,9 @@ class ThermalWindow(Gtk.ApplicationWindow):
             logger.warning(f"Camera initialization failed: {e}, falling back to mock camera")
             self.cap = MockThermalCamera()
 
+        # Initialize frame buffer
+        self.current_frame = None
+
         # Initialize modes
         self.modes = {
             AppMode.LIVE_VIEW: LiveViewMode(self),
@@ -144,6 +153,9 @@ class ThermalWindow(Gtk.ApplicationWindow):
 
         # Start in live view mode
         self.switch_mode(AppMode.LIVE_VIEW)
+
+        # Show all widgets
+        self.show_all()
 
         # Update frame every 16ms (targeting 60 FPS max)
         GLib.timeout_add(16, self.update_frame)
@@ -189,10 +201,10 @@ class ThermalWindow(Gtk.ApplicationWindow):
                     # Process frame through current mode
                     self.current_frame = mode.process_frame(frame)
                     self.drawing_area.queue_draw()
-            return True
+            return True  # Continue updates
         except Exception as e:
             logger.error(f"Error updating frame: {e}")
-            return False
+            return True  # Continue updates even on error
 
     def draw_frame(self, area, ctx, width, height):
         """Draw current frame."""
