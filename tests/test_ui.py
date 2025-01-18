@@ -1,43 +1,98 @@
-import pytest
+"""Tests for UI components."""
+import os
 import gi
-import cairo
+import sys
+
+# Get GTK version from environment or use system default
+GTK_VERSION = os.environ.get('GTK_VERSION', '4.0')
+gi.require_version('Gtk', GTK_VERSION)
+
+from gi.repository import Gtk, GLib, Gdk
+import pytest
+from unittest.mock import MagicMock, patch
 import numpy as np
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk
+import cv2
 
-def test_cairo_surface_creation():
-    # Create contiguous array with proper stride alignment
-    test_frame = np.zeros((192, 256, 4), dtype=np.uint8)
-    frame_data = np.ascontiguousarray(test_frame).copy()
-    
-    try:
-        surface = cairo.ImageSurface.create_for_data(
-            frame_data.data,
-            cairo.FORMAT_RGB24,
-            256,
-            192,
-            frame_data.strides[0]
-        )
-        assert surface is not None
-    except BufferError as e:
-        pytest.fail(f"Failed to create Cairo surface: {e}")
+from thermal2pro.ui.window import ThermalWindow
+from thermal2pro.camera.mock_camera import MockThermalCamera
+
+@pytest.fixture
+def mock_app():
+    """Create a mock GTK application."""
+    app = MagicMock()
+    app.__class__ = Gtk.Application
+    return app
+
+@pytest.fixture
+def mock_camera():
+    """Create a mock thermal camera."""
+    camera = MockThermalCamera()
+    return camera
+
+def test_window_initialization(mock_app):
+    """Test window initialization."""
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+    assert window is not None
+    assert isinstance(window, Gtk.ApplicationWindow)
+    assert window.get_title() == "P2 Pro Thermal"
+
+def test_camera_fallback(mock_app):
+    """Test camera initialization fallback."""
+    with patch('cv2.VideoCapture') as mock_cv2:
+        # Make real camera fail
+        mock_cv2.return_value.isOpened.return_value = False
         
-    # Verify surface properties
-    assert surface.get_width() == 256
-    assert surface.get_height() == 192
-    assert surface.get_format() == cairo.FORMAT_RGB24
+        # Should fall back to mock camera
+        window = ThermalWindow(mock_app, use_mock_camera=False)
+        assert window.cap is not None
+        assert isinstance(window.cap, MockThermalCamera)
 
-def test_frame_buffer_writable():
-    test_frame = np.zeros((192, 256, 3), dtype=np.uint8)
-    assert test_frame.flags.writeable
+def test_frame_processing(mock_app):
+    """Test frame processing pipeline."""
+    window = ThermalWindow(mock_app, use_mock_camera=True)
     
-    frame_bytes = test_frame.tobytes()
-    assert frame_bytes is not None
-    assert len(frame_bytes) == 192 * 256 * 3
+    # Create test frame
+    frame = np.zeros((192, 256, 3), dtype=np.uint8)
+    frame[50:150, 50:150] = 255  # Add white square
+    
+    # Mock camera read
+    window.cap.read = MagicMock(return_value=(True, frame))
+    
+    # Process frame
+    assert window.update_frame()
+    assert window.current_frame is not None
+    assert window.current_frame.shape == frame.shape
 
-def test_gtk_drawing_area():
-    win = Gtk.Window()
-    drawing_area = Gtk.DrawingArea()
-    win.add(drawing_area)
-    assert drawing_area.get_allocated_width() >= 0
-    assert drawing_area.get_allocated_height() >= 0
+def test_window_cleanup(mock_app):
+    """Test window cleanup."""
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+    
+    # Mock camera
+    window.cap = MagicMock()
+    
+    # Trigger cleanup
+    window.do_close_request()
+    
+    # Verify camera released
+    window.cap.release.assert_called_once()
+
+def test_drawing_area(mock_app):
+    """Test drawing area setup."""
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+    
+    # Verify drawing area properties
+    assert window.drawing_area is not None
+    assert isinstance(window.drawing_area, Gtk.DrawingArea)
+    assert window.drawing_area.get_vexpand()
+    assert window.drawing_area.get_hexpand()
+
+def test_error_handling(mock_app):
+    """Test error handling in frame processing."""
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+    
+    # Make camera read fail
+    window.cap.read = MagicMock(return_value=(False, None))
+    
+    # Should handle error gracefully
+    assert window.update_frame()  # Returns True to continue updates
+    assert window.current_frame is None

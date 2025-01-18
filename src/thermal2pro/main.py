@@ -13,8 +13,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Set GTK version based on environment or default to 3.0
-GTK_VERSION = os.environ.get('GTK_VERSION', '3.0')
+# Set GTK version based on environment or default to 4.0
+GTK_VERSION = os.environ.get('GTK_VERSION', '4.0')
 try:
     gi.require_version('Gtk', GTK_VERSION)
     logger.info(f"Using GTK {GTK_VERSION}")

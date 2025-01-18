@@ -1,15 +1,7 @@
 Test Results (pytest)
 ====================
 
-Total Tests: 5
-Passed: 5
+Total Tests: 0
+Passed: 0
 Failed: 0
 
-Test Details:
-------------
-
-✓ test_mode_lifecycle
-✓ test_live_view_mode
-✓ test_mode_switching
-✓ test_frame_processing
-✓ test_error_handling

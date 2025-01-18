@@ -1,10 +1,12 @@
 """Tests for the mode management system."""
 import os
 import gi
-try:
-    gi.require_version('Gtk', os.environ.get('GTK_VERSION', '3.0'))
-except ValueError:
-    gi.require_version('Gtk', '3.0')
+import sys
+
+# Get GTK version from environment or use system default
+GTK_VERSION = os.environ.get('GTK_VERSION', '4.0')
+gi.require_version('Gtk', GTK_VERSION)
+
 from gi.repository import Gtk, Gio, GObject
 import pytest
 from unittest.mock import MagicMock, patch
