@@ -1,10 +1,8 @@
 """Live view mode implementation."""
 import os
 import gi
-try:
-    gi.require_version('Gtk', os.environ.get('GTK_VERSION', '3.0'))
-except ValueError:
-    gi.require_version('Gtk', '3.0')
+
+# Import GTK after version is set in main.py
 from gi.repository import Gtk, GLib
 import logging
 import cv2

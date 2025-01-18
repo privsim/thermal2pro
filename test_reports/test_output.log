@@ -3,23 +3,69 @@ platform darwin -- Python 3.13.1, pytest-8.3.4, pluggy-1.5.0 -- /Users/lclose/th
 cachedir: .pytest_cache
 rootdir: /Users/lclose/thermal2pro
 configfile: pyproject.toml
-collecting ... collected 0 items / 2 errors
+collecting ... collected 11 items
 
-==================================== ERRORS ====================================
-_____________________ ERROR collecting tests/test_modes.py _____________________
-tests/test_modes.py:8: in <module>
-    gi.require_version('Gtk', GTK_VERSION)
-thermalenv/lib/python3.13/site-packages/gi/__init__.py:125: in require_version
-    raise ValueError('Namespace %s not available for version %s' %
-E   ValueError: Namespace Gtk not available for version 4.0
-______________________ ERROR collecting tests/test_ui.py _______________________
-tests/test_ui.py:8: in <module>
-    gi.require_version('Gtk', GTK_VERSION)
-thermalenv/lib/python3.13/site-packages/gi/__init__.py:125: in require_version
-    raise ValueError('Namespace %s not available for version %s' %
-E   ValueError: Namespace Gtk not available for version 4.0
+tests/test_modes.py::TestModes::test_mode_lifecycle PASSED               [  9%]
+tests/test_modes.py::TestModes::test_live_view_mode PASSED               [ 18%]
+tests/test_modes.py::TestModes::test_mode_switching FAILED               [ 27%]
+tests/test_modes.py::TestModes::test_frame_processing PASSED             [ 36%]
+tests/test_modes.py::TestModes::test_error_handling PASSED               [ 45%]
+tests/test_ui.py::TestWindow::test_window_initialization FAILED          [ 54%]
+tests/test_ui.py::TestWindow::test_camera_fallback FAILED                [ 63%]
+tests/test_ui.py::TestWindow::test_frame_processing FAILED               [ 72%]
+tests/test_ui.py::TestWindow::test_window_cleanup FAILED                 [ 81%]
+tests/test_ui.py::TestWindow::test_drawing_area FAILED                   [ 90%]
+tests/test_ui.py::TestWindow::test_error_handling FAILED                 [100%]
+
+=================================== FAILURES ===================================
+________________________ TestModes.test_mode_switching _________________________
+tests/test_modes.py:140: in test_mode_switching
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+src/thermal2pro/ui/window.py:56: in __init__
+    self.add(self.box)
+E   TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+____________________ TestWindow.test_window_initialization _____________________
+tests/test_ui.py:35: in test_window_initialization
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+src/thermal2pro/ui/window.py:56: in __init__
+    self.add(self.box)
+E   TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+_______________________ TestWindow.test_camera_fallback ________________________
+tests/test_ui.py:47: in test_camera_fallback
+    window = ThermalWindow(mock_app, use_mock_camera=False)
+src/thermal2pro/ui/window.py:56: in __init__
+    self.add(self.box)
+E   TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+_______________________ TestWindow.test_frame_processing _______________________
+tests/test_ui.py:54: in test_frame_processing
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+src/thermal2pro/ui/window.py:56: in __init__
+    self.add(self.box)
+E   TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+________________________ TestWindow.test_window_cleanup ________________________
+tests/test_ui.py:72: in test_window_cleanup
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+src/thermal2pro/ui/window.py:56: in __init__
+    self.add(self.box)
+E   TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+_________________________ TestWindow.test_drawing_area _________________________
+tests/test_ui.py:87: in test_drawing_area
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+src/thermal2pro/ui/window.py:56: in __init__
+    self.add(self.box)
+E   TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+________________________ TestWindow.test_error_handling ________________________
+tests/test_ui.py:99: in test_error_handling
+    window = ThermalWindow(mock_app, use_mock_camera=True)
+src/thermal2pro/ui/window.py:56: in __init__
+    self.add(self.box)
+E   TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
 =========================== short test summary info ============================
-ERROR tests/test_modes.py - ValueError: Namespace Gtk not available for version 4.0
-ERROR tests/test_ui.py - ValueError: Namespace Gtk not available for version 4.0
-!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-============================== 2 errors in 0.07s ===============================
+FAILED tests/test_modes.py::TestModes::test_mode_switching - TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+FAILED tests/test_ui.py::TestWindow::test_window_initialization - TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+FAILED tests/test_ui.py::TestWindow::test_camera_fallback - TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+FAILED tests/test_ui.py::TestWindow::test_frame_processing - TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+FAILED tests/test_ui.py::TestWindow::test_window_cleanup - TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+FAILED tests/test_ui.py::TestWindow::test_drawing_area - TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+FAILED tests/test_ui.py::TestWindow::test_error_handling - TypeError: argument widget: Expected Gtk.Widget, but got unittest.mock.MagicMock
+========================= 7 failed, 4 passed in 0.19s ==========================
