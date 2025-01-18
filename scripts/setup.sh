@@ -5,7 +5,48 @@ BASE_DIR=$(pwd)
 SRC_DIR="${BASE_DIR}/src/thermal2pro"
 VENV_DIR="${BASE_DIR}/thermalenv"
 
+install_system_dependencies() {
+    echo "Installing system dependencies..."
+    if command -v apt &> /dev/null; then
+        sudo apt update
+        sudo apt install -y \
+            python3-gi \
+            python3-gi-cairo \
+            gir1.2-gtk-4.0 \
+            libgirepository1.0-dev \
+            gcc \
+            libcairo2-dev \
+            pkg-config \
+            python3-dev
+    else
+        echo "Warning: apt not found. Please install required dependencies manually:"
+        echo "- python3-gi"
+        echo "- python3-gi-cairo"
+        echo "- gir1.2-gtk-4.0"
+        echo "- libgirepository1.0-dev"
+        echo "- gcc"
+        echo "- libcairo2-dev"
+        echo "- pkg-config"
+        echo "- python3-dev"
+    fi
+}
+
+setup_user_permissions() {
+    echo "Setting up user permissions..."
+    if getent group video > /dev/null; then
+        if ! groups | grep -q "\bvideo\b"; then
+            sudo usermod -a -G video "$USER"
+            echo "Added user to video group. Please log out and back in for changes to take effect."
+        else
+            echo "User already in video group."
+        fi
+    else
+        echo "Warning: video group not found. Please ensure proper camera permissions manually."
+    fi
+}
+
 create_directory_structure() {
+    echo "Creating directory structure..."
     mkdir -p "${SRC_DIR}"/{camera,storage,ui}
     mkdir -p "${BASE_DIR}"/{tests,scripts,docs/img}
 
@@ -17,14 +58,30 @@ create_directory_structure() {
 }
 
 setup_virtual_environment() {
-    if [ ! -d "$VENV_DIR" ]; then
-        echo "Creating virtual environment..."
+    echo "Setting up Python virtual environment..."
+    
+    # Check if venv exists and is valid
+    if [ ! -d "$VENV_DIR" ] || [ ! -f "${VENV_DIR}/bin/activate" ]; then
+        echo "Creating new virtual environment..."
         python3 -m venv "$VENV_DIR"
     fi
+    
+    # Source the virtual environment
+    # shellcheck disable=SC1090
     source "${VENV_DIR}/bin/activate"
-    pip install --upgrade pip
-    pip install pytest PyGObject
-    pip install -r requirements.txt
+    
+    # Verify activation
+    if [ -z "${VIRTUAL_ENV:-}" ]; then
+        echo "Error: Virtual environment activation failed"
+        exit 1
+    fi
+    
+    echo "Upgrading pip and installing dependencies..."
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirements.txt
+    
+    # Install in development mode
+    python3 -m pip install -e .
 }
 
 migrate_existing_files() {
@@ -132,8 +189,9 @@ Thermal imaging application for P2 Pro camera.
 
 1. Clone this repository
 2. Run `./scripts/setup.sh` to set up the project
-3. Activate the virtual environment: `source thermalenv/bin/activate`
-4. Run the application: `python -m thermal2pro.main`
+3. Log out and back in for group permissions to take effect
+4. Activate the virtual environment: `source thermalenv/bin/activate`
+5. Run the application: `python -m thermal2pro.main`
 
 ## Development
 
@@ -167,13 +225,9 @@ sudo apt install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
 
 1. Clone the repository
 2. Run `./scripts/setup.sh`
-3. Add your user to the video group: `sudo usermod -a -G video $USER`
-4. Log out and back in for group changes to take effect
-
-## Running the Application
-
-1. Activate the virtual environment: `source thermalenv/bin/activate`
-2. Run: `python -m thermal2pro.main`
+3. Log out and back in for group permissions to take effect
+4. Activate the virtual environment: `source thermalenv/bin/activate`
+5. Run: `python -m thermal2pro.main`
 
 ## Systemd Service Installation
 
@@ -189,13 +243,26 @@ EOL
 
 # Main execution
 echo "Setting up Thermal2Pro project..."
+
+# Install system dependencies first
+install_system_dependencies
+
+# Set up directory structure
 create_directory_structure
+
+# Set up Python environment
 setup_virtual_environment
+
+# Migrate any existing files
 migrate_existing_files
+
+# Create configuration files
 create_config_files
 
-echo "Installing the package in development mode..."
-pip install -e .
+# Set up user permissions last
+setup_user_permissions
 
-echo "Setup complete! Activate your virtual environment with:"
+echo "Setup complete!"
+echo "Please log out and back in for group permissions to take effect."
+echo "Then activate your virtual environment with:"
 echo "source thermalenv/bin/activate"
