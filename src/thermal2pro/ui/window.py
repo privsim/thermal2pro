@@ -2,10 +2,9 @@
 import os
 import gi
 import sys
-try:
-    gi.require_version('Gtk', os.environ.get('GTK_VERSION', '3.0'))
-except ValueError:
-    gi.require_version('Gtk', '3.0')
+
+# Use GTK 4.0
+gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib, Gdk
 import cv2
 import numpy as np
@@ -28,32 +27,22 @@ class ThermalWindow(Gtk.ApplicationWindow):
         # Set default window size
         self.set_default_size(800, 600)
         
-        # Center window - handle GTK version differences
-        if hasattr(Gtk.WindowPosition, 'CENTER'):
-            # GTK3 style
-            self.set_position(Gtk.WindowPosition.CENTER)
-        else:
-            # GTK4 style - default to center
-            screen = self.get_screen()
-            if screen:
-                monitor = screen.get_monitor_at_window(screen.get_active_window())
-                geometry = monitor.get_geometry()
-                x = (geometry.width - 800) // 2
-                y = (geometry.height - 600) // 2
-                self.move(x, y)
+        # Center window
+        screen = self.get_screen()
+        if screen:
+            monitor = screen.get_monitor_at_window(screen.get_active_window())
+            geometry = monitor.get_geometry()
+            x = (geometry.width - 800) // 2
+            y = (geometry.height - 600) // 2
+            self.move(x, y)
 
         # Main vertical box
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         self.box.set_margin_top(5)
         self.box.set_margin_bottom(5)
-        if Gtk._version.startswith('4'):
-            self.box.set_margin_start(5)
-            self.box.set_margin_end(5)
-            self.set_child(self.box)
-        else:
-            self.box.set_margin_left(5)
-            self.box.set_margin_right(5)
-            self.add(self.box)
+        self.box.set_margin_start(5)
+        self.box.set_margin_end(5)
+        self.set_child(self.box)
 
         # Camera view area
         self.drawing_area = Gtk.DrawingArea()
@@ -63,26 +52,16 @@ class ThermalWindow(Gtk.ApplicationWindow):
         self.drawing_area.set_vexpand(True)
         self.drawing_area.set_hexpand(True)
         
-        if Gtk._version.startswith('4'):
-            self.drawing_area.set_draw_func(self.draw_frame)
-        else:
-            self.drawing_area.connect("draw", self.draw_frame_gtk3)
+        self.drawing_area.set_draw_func(self.draw_frame)
         
         # Add drawing area to box
-        if Gtk._version.startswith('4'):
-            self.box.append(self.drawing_area)
-        else:
-            self.box.pack_start(self.drawing_area, True, True, 0)
+        self.box.append(self.drawing_area)
 
         # Mode selector bar
         mode_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
         mode_bar.set_margin_bottom(5)
-        if Gtk._version.startswith('4'):
-            mode_bar.set_margin_start(5)
-            mode_bar.set_margin_end(5)
-        else:
-            mode_bar.set_margin_left(5)
-            mode_bar.set_margin_right(5)
+        mode_bar.set_margin_start(5)
+        mode_bar.set_margin_end(5)
 
         # Create mode buttons
         self.mode_buttons = {}
@@ -90,39 +69,24 @@ class ThermalWindow(Gtk.ApplicationWindow):
             button = Gtk.ToggleButton(label=mode.name.replace('_', ' '))
             button.set_can_focus(True)  # Enable keyboard focus
             button.set_focus_on_click(True)  # Focus when clicked
-            if not Gtk._version.startswith('4'):
-                button.set_can_default(True)  # Enable default button state
             button.connect('toggled', self.on_mode_button_toggled, mode)
             # Make buttons larger and more touch-friendly
             button.set_size_request(100, 40)
-            if Gtk._version.startswith('4'):
-                mode_bar.append(button)
-            else:
-                mode_bar.pack_start(button, True, True, 0)
+            mode_bar.append(button)
             self.mode_buttons[mode] = button
 
         # Add mode bar to main box
-        if Gtk._version.startswith('4'):
-            self.box.append(mode_bar)
-        else:
-            self.box.pack_start(mode_bar, False, False, 0)
+        self.box.append(mode_bar)
 
         # Controls container
         self.controls_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.controls_container.set_margin_top(5)
         self.controls_container.set_margin_bottom(5)
-        if Gtk._version.startswith('4'):
-            self.controls_container.set_margin_start(5)
-            self.controls_container.set_margin_end(5)
-        else:
-            self.controls_container.set_margin_left(5)
-            self.controls_container.set_margin_right(5)
+        self.controls_container.set_margin_start(5)
+        self.controls_container.set_margin_end(5)
 
         # Add controls container to main box
-        if Gtk._version.startswith('4'):
-            self.box.append(self.controls_container)
-        else:
-            self.box.pack_start(self.controls_container, False, False, 0)
+        self.box.append(self.controls_container)
 
         # Initialize camera
         self.cap = None
@@ -161,21 +125,13 @@ class ThermalWindow(Gtk.ApplicationWindow):
         self.current_mode = None
 
         # Enable touch events
-        if Gtk._version.startswith('4'):
-            self.set_receives_default(True)
-        else:
-            events = Gdk.EventMask.BUTTON_PRESS_MASK | \
-                    Gdk.EventMask.BUTTON_RELEASE_MASK | \
-                    Gdk.EventMask.POINTER_MOTION_MASK | \
-                    Gdk.EventMask.TOUCH_MASK
-            self.add_events(events)
-            self.set_can_focus(True)
+        self.set_receives_default(True)
 
         # Start in live view mode
         self.switch_mode(AppMode.LIVE_VIEW)
 
         # Show all widgets
-        self.show_all()
+        self.show()
 
         # Update frame every 16ms (targeting 60 FPS max)
         GLib.timeout_add(16, self.update_frame)
@@ -242,11 +198,6 @@ class ThermalWindow(Gtk.ApplicationWindow):
         except Exception as e:
             logger.error(f"Error drawing frame: {e}")
             return False
-
-    def draw_frame_gtk3(self, widget, ctx):
-        """GTK3 draw callback."""
-        return self.draw_frame(widget, ctx, widget.get_allocated_width(), 
-                             widget.get_allocated_height())
 
     def do_close_request(self):
         """Clean up resources when window is closed."""

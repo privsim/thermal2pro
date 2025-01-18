@@ -2,8 +2,9 @@
 import os
 import gi
 
-# Import GTK after version is set in main.py
-from gi.repository import Gtk, GLib, Gdk
+# Use GTK 4.0
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk, GLib
 import logging
 from abc import ABC, abstractmethod
 import cv2
@@ -55,24 +56,8 @@ class BaseMode(ABC):
             logger.info(f"Activating {self.__class__.__name__}")
             self.is_active = True
             if self.controls_box:
-                # Add controls to window
-                if Gtk._version.startswith('4'):
-                    self.window.controls_container.append(self.controls_box)
-                else:
-                    self.window.controls_container.pack_start(self.controls_box, True, True, 0)
-                
-                # Enable input events
-                if not Gtk._version.startswith('4'):
-                    events = Gdk.EventMask.BUTTON_PRESS_MASK | \
-                            Gdk.EventMask.BUTTON_RELEASE_MASK | \
-                            Gdk.EventMask.POINTER_MOTION_MASK | \
-                            Gdk.EventMask.TOUCH_MASK
-                    self.controls_box.add_events(events)
-                
-                # Show controls
-                self.controls_box.show_all()
-                self.controls_box.set_can_focus(True)
-                
+                self.window.controls_container.append(self.controls_box)
+                self.controls_box.show()
             self._on_activate()
     
     def deactivate(self):
@@ -81,12 +66,7 @@ class BaseMode(ABC):
             logger.info(f"Deactivating {self.__class__.__name__}")
             self.is_active = False
             if self.controls_box:
-                # Hide controls before removing
-                self.controls_box.hide()
-                if Gtk._version.startswith('4'):
-                    self.window.controls_container.remove(self.controls_box)
-                else:
-                    self.window.controls_container.remove(self.controls_box)
+                self.window.controls_container.remove(self.controls_box)
             self._on_deactivate()
     
     def _on_activate(self):

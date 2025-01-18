@@ -2,7 +2,8 @@
 import os
 import gi
 
-# Import GTK after version is set in main.py
+# Use GTK 4.0
+gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
 import logging
 import cv2
@@ -38,42 +39,20 @@ class LiveViewMode(BaseMode):
     
     def create_controls(self):
         """Create live view controls."""
-        self.controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        self.controls_box.set_margin_top(5)
-        self.controls_box.set_margin_bottom(5)
-        if Gtk._version.startswith('4'):
-            self.controls_box.set_margin_start(5)
-            self.controls_box.set_margin_end(5)
-        else:
-            self.controls_box.set_margin_left(5)
-            self.controls_box.set_margin_right(5)
+        self.controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.controls_box.set_spacing(10)
+        self.controls_box.set_margin_start(5)
+        self.controls_box.set_margin_end(5)
         
         # Palette selector
-        if Gtk._version.startswith('4'):
-            palette_store = Gtk.StringList()
-            for name in ["Iron", "Rainbow", "Gray"]:
-                palette_store.append(name)
-            self.palette_dropdown = Gtk.DropDown(model=palette_store)
-            # Set initial selection to Rainbow
-            self.palette_dropdown.set_selected(1)
-        else:
-            palette_store = Gtk.ListStore(str)
-            for name in ["Iron", "Rainbow", "Gray"]:
-                palette_store.append([name])
-            self.palette_dropdown = Gtk.ComboBox.new_with_model(palette_store)
-            renderer_text = Gtk.CellRendererText()
-            self.palette_dropdown.pack_start(renderer_text, True)
-            self.palette_dropdown.add_attribute(renderer_text, "text", 0)
-            # Set initial selection to Rainbow
-            self.palette_dropdown.set_active(1)
+        palette_store = Gtk.StringList()
+        for name in ["Iron", "Rainbow", "Gray"]:
+            palette_store.append(name)
+        self.palette_dropdown = Gtk.DropDown(model=palette_store)
+        # Set initial selection to Rainbow
+        self.palette_dropdown.set_selected(1)
         
-        # Enable input handling for dropdown
-        self.palette_dropdown.set_can_focus(True)
-        if not Gtk._version.startswith('4'):
-            self.palette_dropdown.set_can_default(True)
-        
-        self.palette_dropdown.connect("changed" if Gtk._version.startswith('3') else "notify::selected", 
-                                    self.on_palette_changed)
+        self.palette_dropdown.connect("notify::selected", self.on_palette_changed)
         
         # Make dropdown larger and more touch-friendly
         self.palette_dropdown.set_size_request(120, 40)
@@ -81,24 +60,15 @@ class LiveViewMode(BaseMode):
         # FPS toggle button
         self.fps_button = Gtk.ToggleButton(label="FPS")
         self.fps_button.set_can_focus(True)
-        if not Gtk._version.startswith('4'):
-            self.fps_button.set_can_default(True)
         self.fps_button.set_active(self.fps_overlay)
         self.fps_button.connect("toggled", self.on_fps_toggled)
         
         # Make button larger and more touch-friendly
         self.fps_button.set_size_request(80, 40)
         
-        # Add controls to box with proper spacing
-        if Gtk._version.startswith('4'):
-            self.controls_box.append(self.palette_dropdown)
-            self.controls_box.append(self.fps_button)
-        else:
-            self.controls_box.pack_start(self.palette_dropdown, True, True, 5)
-            self.controls_box.pack_start(self.fps_button, False, False, 5)
-        
-        # Show all controls
-        self.controls_box.show_all()
+        # Add controls to box
+        self.controls_box.append(self.palette_dropdown)
+        self.controls_box.append(self.fps_button)
     
     def process_frame(self, frame):
         """Process camera frame.
@@ -162,10 +132,7 @@ class LiveViewMode(BaseMode):
             1: COLORMAP_RAINBOW, # Rainbow
             2: COLORMAP_GRAY     # Gray
         }
-        if Gtk._version.startswith('4'):
-            selected = dropdown.get_selected()
-        else:
-            selected = dropdown.get_active()
+        selected = dropdown.get_selected()
         self.color_palette = palette_map[selected]
         logger.debug(f"Color palette changed to: {selected}")
     
