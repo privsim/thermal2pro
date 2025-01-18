@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+import os
 import gi
 import sys
 try:
-    gi.require_version('Gtk', '4.0')
+    gi.require_version('Gtk', os.environ.get('GTK_VERSION', '3.0'))
 except ValueError:
     gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib, Gdk
@@ -23,26 +24,39 @@ class ThermalWindow(Gtk.ApplicationWindow):
         super().__init__(application=app)
         self.set_title("P2 Pro Thermal")
         
-        # Set default window size instead of fullscreen
+        # Set default window size
         self.set_default_size(800, 600)
-        self.set_position(Gtk.WindowPosition.CENTER)
+        
+        # Center window - handle GTK version differences
+        if hasattr(Gtk.WindowPosition, 'CENTER'):
+            # GTK3 style
+            self.set_position(Gtk.WindowPosition.CENTER)
+        else:
+            # GTK4 style - default to center
+            screen = self.get_screen()
+            if screen:
+                monitor = screen.get_monitor_at_window(screen.get_active_window())
+                geometry = monitor.get_geometry()
+                x = (geometry.width - 800) // 2
+                y = (geometry.height - 600) // 2
+                self.move(x, y)
 
         # Main vertical box
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             self.set_child(self.box)
         else:
             self.add(self.box)
 
         # Camera view area
         self.drawing_area = Gtk.DrawingArea()
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             self.drawing_area.set_draw_func(self.draw_frame)
         else:
             self.drawing_area.connect("draw", self.draw_frame_gtk3)
         
         # Add drawing area to box
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             self.box.append(self.drawing_area)
         else:
             self.box.pack_start(self.drawing_area, True, True, 0)
@@ -50,7 +64,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
         # Button bar at bottom
         button_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         button_bar.set_spacing(10)
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             button_bar.set_margin_start(10)
             button_bar.set_margin_end(10)
             button_bar.set_margin_bottom(10)
@@ -64,13 +78,13 @@ class ThermalWindow(Gtk.ApplicationWindow):
         capture_button.connect("clicked", self.capture_image)
         capture_button.set_vexpand(False)
         capture_button.set_hexpand(True)
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             button_bar.append(capture_button)
         else:
             button_bar.pack_start(capture_button, True, True, 0)
 
         # Color palette selector
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             palette_store = Gtk.StringList()
             for name in ["Iron", "Rainbow", "Gray"]:
                 palette_store.append(name)
@@ -84,10 +98,10 @@ class ThermalWindow(Gtk.ApplicationWindow):
             self.palette_dropdown.pack_start(renderer_text, True)
             self.palette_dropdown.add_attribute(renderer_text, "text", 0)
 
-        self.palette_dropdown.connect("changed" if Gtk._version == "3.0" else "notify::selected", self.change_palette)
+        self.palette_dropdown.connect("changed" if Gtk._version.startswith('3') else "notify::selected", self.change_palette)
         self.palette_dropdown.set_vexpand(False)
         self.palette_dropdown.set_hexpand(True)
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             button_bar.append(self.palette_dropdown)
         else:
             button_bar.pack_start(self.palette_dropdown, True, True, 0)
@@ -97,13 +111,13 @@ class ThermalWindow(Gtk.ApplicationWindow):
         metrics_button.connect("clicked", self.toggle_metrics)
         metrics_button.set_vexpand(False)
         metrics_button.set_hexpand(False)
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             button_bar.append(metrics_button)
         else:
             button_bar.pack_start(metrics_button, False, False, 0)
 
         # Add button bar to main box
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             self.box.append(button_bar)
         else:
             self.box.pack_start(button_bar, False, False, 0)
@@ -230,7 +244,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
             1: cv2.COLORMAP_JET,    # Rainbow
             2: cv2.COLORMAP_BONE    # Gray
         }
-        if Gtk._version == "4.0":
+        if Gtk._version.startswith('4'):
             selected = dropdown.get_selected()
         else:
             selected = dropdown.get_active()

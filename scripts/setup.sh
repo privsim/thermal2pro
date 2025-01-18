@@ -8,10 +8,11 @@ install_system_dependencies() {
     echo "Installing system dependencies..."
     if command -v apt &> /dev/null; then
         sudo apt update
+        # Install GTK3 by default for better compatibility
         sudo apt install -y \
             python3-gi \
             python3-gi-cairo \
-            gir1.2-gtk-4.0 \
+            gir1.2-gtk-3.0 \
             libgirepository1.0-dev \
             gcc \
             libcairo2-dev \
@@ -21,7 +22,7 @@ install_system_dependencies() {
         echo "Warning: apt not found. Please install required dependencies manually:"
         echo "- python3-gi"
         echo "- python3-gi-cairo"
-        echo "- gir1.2-gtk-4.0"
+        echo "- gir1.2-gtk-3.0"
         echo "- libgirepository1.0-dev"
         echo "- gcc"
         echo "- libcairo2-dev"
@@ -52,6 +53,16 @@ setup_virtual_environment() {
         echo "Creating new virtual environment..."
         python3 -m venv "$VENV_DIR"
     fi
+    
+    # Create environment setup file
+    cat > "${VENV_DIR}/bin/activate.d/thermal2pro.sh" << 'EOL'
+#!/bin/bash
+# Disable GTK accessibility bus to prevent warnings
+export GTK_A11Y=none
+# Use GTK3 by default for better compatibility
+export GTK_VERSION=3.0
+EOL
+    chmod +x "${VENV_DIR}/bin/activate.d/thermal2pro.sh"
     
     # Source the virtual environment
     # shellcheck disable=SC1090

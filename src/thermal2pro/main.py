@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
+import os
 import gi
-import signal
 import sys
 import logging
-from contextlib import contextmanager
+import argparse
+import signal
 
 # Configure logging
 logging.basicConfig(
@@ -12,100 +13,66 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Set GTK version based on environment or default to 3.0
+GTK_VERSION = os.environ.get('GTK_VERSION', '3.0')
 try:
-    gi.require_version('Gtk', '4.0')
-    logger.info("Using GTK 4.0")
-except ValueError:
+    gi.require_version('Gtk', GTK_VERSION)
+    logger.info(f"Using GTK {GTK_VERSION}")
+except ValueError as e:
+    logger.warning(f"Failed to use GTK {GTK_VERSION}, falling back to GTK 3.0")
     gi.require_version('Gtk', '3.0')
-    logger.info("Falling back to GTK 3.0")
 
-from gi.repository import Gtk, GLib
-
+from gi.repository import Gtk
 from thermal2pro.ui.window import ThermalWindow
+
+def signal_handler(signum, frame):
+    """Handle system signals gracefully."""
+    logger.info(f"Received signal {signum}. Shutting down gracefully...")
+    sys.exit(0)
 
 class ThermalApp(Gtk.Application):
     def __init__(self, use_mock_camera=False):
         super().__init__()
-        self._window = None
         self.use_mock_camera = use_mock_camera
-        self.setup_signal_handlers()
         logger.info("ThermalApp initialized")
 
-    def setup_signal_handlers(self):
-        """Set up signal handlers for graceful shutdown."""
-        try:
-            # Use GLib's unix signal handling
-            GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self.on_sigint)
-            GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.on_sigterm)
-            logger.info("Signal handlers set up successfully")
-        except Exception as e:
-            logger.error(f"Failed to set up signal handlers: {e}")
-
-    def on_sigint(self):
-        """Handle SIGINT (Ctrl+C) gracefully."""
-        logger.info("Received SIGINT. Shutting down gracefully...")
-        self.quit()
-        return GLib.SOURCE_REMOVE
-
-    def on_sigterm(self):
-        """Handle SIGTERM gracefully."""
-        logger.info("Received SIGTERM. Shutting down gracefully...")
-        self.quit()
-        return GLib.SOURCE_REMOVE
-
     def do_startup(self):
-        """Called when application is starting up."""
-        try:
-            Gtk.Application.do_startup(self)
-            logger.info("Application startup completed")
-        except Exception as e:
-            logger.error(f"Error during startup: {e}")
-            sys.exit(1)
+        """Handle application startup."""
+        Gtk.Application.do_startup(self)
+        
+        # Set up signal handlers
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        logger.info("Signal handlers set up successfully")
 
     def do_activate(self):
-        """Called when application is activated."""
+        """Handle application activation."""
         try:
-            if not self._window:
-                self._window = ThermalWindow(self, use_mock_camera=self.use_mock_camera)
-                logger.info("Main window created")
-            self._window.present()
+            win = ThermalWindow(self, use_mock_camera=self.use_mock_camera)
+            win.present()
             logger.info("Window presented")
         except Exception as e:
             logger.error(f"Error activating window: {e}")
             self.quit()
 
-    def do_shutdown(self):
-        """Called when application is shutting down."""
-        try:
-            if self._window:
-                self._window.destroy()
-            Gtk.Application.do_shutdown(self)
-            logger.info("Application shutdown completed")
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
-
-@contextmanager
-def handle_keyboard_interrupt():
-    """Context manager to handle KeyboardInterrupt gracefully."""
-    try:
-        yield
-    except KeyboardInterrupt:
-        logger.info("Received KeyboardInterrupt. Shutting down gracefully...")
-        sys.exit(0)
-
 def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description='Thermal2Pro Camera Application')
+    parser.add_argument('--mock', action='store_true', help='Use mock camera for testing')
+    args = parser.parse_args()
+
+    if args.mock:
+        logger.info("Starting in mock camera mode")
+
     try:
-        # Check if we should use mock camera
-        use_mock = "--mock" in sys.argv
-        if use_mock:
-            logger.info("Starting in mock camera mode")
-        
-        app = ThermalApp(use_mock_camera=use_mock)
-        with handle_keyboard_interrupt():
-            return app.run(None)
+        app = ThermalApp(use_mock_camera=args.mock)
+        logger.info("Application startup completed")
+        exit_status = app.run(None)
+        logger.info("Application shutdown completed")
+        return exit_status
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        sys.exit(1)
+        logger.error(f"Application error: {e}")
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
