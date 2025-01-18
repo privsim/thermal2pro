@@ -16,6 +16,7 @@ import logging
 from thermal2pro.ui.cairo_handler import CairoSurfaceHandler
 from thermal2pro.ui.live_view import LiveViewHandler
 from thermal2pro.camera.mock_camera import MockThermalCamera
+from thermal2pro.ui.modes import AppMode, LiveViewMode
 
 logger = logging.getLogger(__name__)
 
@@ -61,66 +62,52 @@ class ThermalWindow(Gtk.ApplicationWindow):
         else:
             self.box.pack_start(self.drawing_area, True, True, 0)
 
-        # Button bar at bottom
-        button_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        button_bar.set_spacing(10)
+        # Mode selector bar
+        mode_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        mode_bar.set_spacing(5)
         if Gtk._version.startswith('4'):
-            button_bar.set_margin_start(10)
-            button_bar.set_margin_end(10)
-            button_bar.set_margin_bottom(10)
+            mode_bar.set_margin_start(5)
+            mode_bar.set_margin_end(5)
+            mode_bar.set_margin_top(5)
         else:
-            button_bar.set_margin_left(10)
-            button_bar.set_margin_right(10)
-            button_bar.set_margin_bottom(10)
+            mode_bar.set_margin_left(5)
+            mode_bar.set_margin_right(5)
+            mode_bar.set_margin_top(5)
 
-        # Large touch-friendly capture button
-        capture_button = Gtk.Button(label="Capture")
-        capture_button.connect("clicked", self.capture_image)
-        capture_button.set_vexpand(False)
-        capture_button.set_hexpand(True)
-        if Gtk._version.startswith('4'):
-            button_bar.append(capture_button)
-        else:
-            button_bar.pack_start(capture_button, True, True, 0)
+        # Create mode buttons
+        self.mode_buttons = {}
+        for mode in AppMode:
+            button = Gtk.ToggleButton(label=mode.name.replace('_', ' '))
+            button.connect('toggled', self.on_mode_button_toggled, mode)
+            if Gtk._version.startswith('4'):
+                mode_bar.append(button)
+            else:
+                mode_bar.pack_start(button, True, True, 0)
+            self.mode_buttons[mode] = button
 
-        # Color palette selector
+        # Add mode bar to main box
         if Gtk._version.startswith('4'):
-            palette_store = Gtk.StringList()
-            for name in ["Iron", "Rainbow", "Gray"]:
-                palette_store.append(name)
-            self.palette_dropdown = Gtk.DropDown(model=palette_store)
+            self.box.append(mode_bar)
         else:
-            palette_store = Gtk.ListStore(str)
-            for name in ["Iron", "Rainbow", "Gray"]:
-                palette_store.append([name])
-            self.palette_dropdown = Gtk.ComboBox.new_with_model(palette_store)
-            renderer_text = Gtk.CellRendererText()
-            self.palette_dropdown.pack_start(renderer_text, True)
-            self.palette_dropdown.add_attribute(renderer_text, "text", 0)
+            self.box.pack_start(mode_bar, False, False, 0)
 
-        self.palette_dropdown.connect("changed" if Gtk._version.startswith('3') else "notify::selected", self.change_palette)
-        self.palette_dropdown.set_vexpand(False)
-        self.palette_dropdown.set_hexpand(True)
+        # Controls container
+        self.controls_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.controls_container.set_spacing(10)
         if Gtk._version.startswith('4'):
-            button_bar.append(self.palette_dropdown)
+            self.controls_container.set_margin_start(10)
+            self.controls_container.set_margin_end(10)
+            self.controls_container.set_margin_bottom(10)
         else:
-            button_bar.pack_start(self.palette_dropdown, True, True, 0)
+            self.controls_container.set_margin_left(10)
+            self.controls_container.set_margin_right(10)
+            self.controls_container.set_margin_bottom(10)
 
-        # Performance metrics toggle button
-        metrics_button = Gtk.Button(label="Metrics")
-        metrics_button.connect("clicked", self.toggle_metrics)
-        metrics_button.set_vexpand(False)
-        metrics_button.set_hexpand(False)
+        # Add controls container to main box
         if Gtk._version.startswith('4'):
-            button_bar.append(metrics_button)
+            self.box.append(self.controls_container)
         else:
-            button_bar.pack_start(metrics_button, False, False, 0)
-
-        # Add button bar to main box
-        if Gtk._version.startswith('4'):
-            self.box.append(button_bar)
-        else:
-            self.box.pack_start(button_bar, False, False, 0)
+            self.box.pack_start(self.controls_container, False, False, 0)
 
         # Initialize camera
         self.cap = None
@@ -148,28 +135,59 @@ class ThermalWindow(Gtk.ApplicationWindow):
             logger.warning(f"Camera initialization failed: {e}, falling back to mock camera")
             self.cap = MockThermalCamera()
 
-        self.current_palette = cv2.COLORMAP_JET
-        self.current_frame = None
-        self.live_view = LiveViewHandler(buffer_size=5)
-        self.show_metrics = False
+        # Initialize modes
+        self.modes = {
+            AppMode.LIVE_VIEW: LiveViewMode(self),
+            # Other modes will be added as they're implemented
+        }
+        self.current_mode = None
+
+        # Start in live view mode
+        self.switch_mode(AppMode.LIVE_VIEW)
 
         # Update frame every 16ms (targeting 60 FPS max)
         GLib.timeout_add(16, self.update_frame)
         logger.info("Window initialization complete")
 
+    def switch_mode(self, mode):
+        """Switch to specified mode."""
+        if self.current_mode == mode:
+            return
+
+        logger.info(f"Switching to {mode.name} mode")
+
+        # Deactivate current mode
+        if self.current_mode is not None:
+            current = self.modes.get(self.current_mode)
+            if current:
+                current.deactivate()
+                self.mode_buttons[self.current_mode].set_active(False)
+
+        # Activate new mode
+        self.current_mode = mode
+        new_mode = self.modes.get(mode)
+        if new_mode:
+            new_mode.activate()
+            self.mode_buttons[mode].set_active(True)
+
+    def on_mode_button_toggled(self, button, mode):
+        """Handle mode button toggle."""
+        if button.get_active():
+            self.switch_mode(mode)
+        elif mode == self.current_mode:
+            # Don't allow deactivating current mode button
+            button.set_active(True)
+
     def update_frame(self):
+        """Update current frame."""
         try:
             ret, frame = self.cap.read()
             if ret:
-                # Convert to grayscale and apply color palette
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                colored = cv2.applyColorMap(gray, self.current_palette)
-                rgb_frame = cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)
-                
-                # Process frame through live view handler
-                processed_frame, _ = self.live_view.process_frame(rgb_frame)
-                if processed_frame is not None:
-                    self.current_frame = processed_frame
+                # Get current mode
+                mode = self.modes.get(self.current_mode)
+                if mode:
+                    # Process frame through current mode
+                    self.current_frame = mode.process_frame(frame)
                     self.drawing_area.queue_draw()
             return True
         except Exception as e:
@@ -177,6 +195,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
             return False
 
     def draw_frame(self, area, ctx, width, height):
+        """Draw current frame."""
         if self.current_frame is None:
             return
 
@@ -184,83 +203,28 @@ class ThermalWindow(Gtk.ApplicationWindow):
             surface = CairoSurfaceHandler.create_surface_from_frame(self.current_frame)
             CairoSurfaceHandler.scale_and_center(ctx, surface, width, height)
             
-            if self.show_metrics:
-                self.draw_metrics_overlay(ctx, width, height)
+            # Draw mode overlay
+            mode = self.modes.get(self.current_mode)
+            if mode:
+                mode.draw_overlay(ctx, width, height)
         except Exception as e:
             logger.error(f"Error drawing frame: {e}")
             return False
 
     def draw_frame_gtk3(self, widget, ctx):
+        """GTK3 draw callback."""
         return self.draw_frame(widget, ctx, widget.get_allocated_width(), 
                              widget.get_allocated_height())
 
-    def draw_metrics_overlay(self, ctx, width, height):
-        """Draw performance metrics overlay."""
-        metrics = self.live_view.get_metrics()
-        
-        # Setup overlay style
-        ctx.save()
-        ctx.set_source_rgba(0, 0, 0, 0.7)  # Semi-transparent black background
-        ctx.rectangle(10, 10, 200, 90)
-        ctx.fill()
-        
-        ctx.set_source_rgb(1, 1, 1)  # White text
-        ctx.select_font_face("monospace")
-        ctx.set_font_size(14)
-        
-        # Draw metrics
-        y = 30
-        for label, value in [
-            ("FPS", f"{metrics.fps:.1f}"),
-            ("Frame Time", f"{metrics.frame_time*1000:.1f}ms"),
-            ("Dropped Frames", str(metrics.dropped_frames)),
-            ("Buffer Usage", f"{metrics.buffer_usage*100:.0f}%")
-        ]:
-            ctx.move_to(20, y)
-            ctx.show_text(f"{label}: {value}")
-            y += 20
-            
-        ctx.restore()
-
-    def capture_image(self, button):
-        if self.current_frame is not None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            capture_dir = Path("/mnt/thermal_storage/thermal_captures")
-            if not capture_dir.exists():
-                capture_dir = Path.home() / "thermal_captures"
-                capture_dir.mkdir(exist_ok=True)
-            
-            filepath = capture_dir / f"thermal_{timestamp}.jpg"
-            try:
-                cv2.imwrite(str(filepath),
-                           cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2BGR))
-                logger.info(f"Captured: {filepath}")
-            except Exception as e:
-                logger.error(f"Error saving capture: {e}")
-
-    def change_palette(self, dropdown, *args):
-        palette_map = {
-            0: cv2.COLORMAP_HOT,    # Iron
-            1: cv2.COLORMAP_JET,    # Rainbow
-            2: cv2.COLORMAP_BONE    # Gray
-        }
-        if Gtk._version.startswith('4'):
-            selected = dropdown.get_selected()
-        else:
-            selected = dropdown.get_active()
-        self.current_palette = palette_map[selected]
-        logger.debug(f"Palette changed to: {selected}")
-
-    def toggle_metrics(self, button):
-        """Toggle performance metrics overlay."""
-        self.show_metrics = not self.show_metrics
-        self.drawing_area.queue_draw()
-        logger.debug(f"Metrics display toggled: {self.show_metrics}")
-
     def do_close_request(self):
         """Clean up resources when window is closed."""
+        # Clean up modes
+        for mode in self.modes.values():
+            mode.cleanup()
+
+        # Release camera
         if self.cap is not None:
             self.cap.release()
-        self.live_view.clear_buffer()
+
         logger.info("Window resources cleaned up")
         return False

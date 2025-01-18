@@ -3,14 +3,18 @@ platform darwin -- Python 3.13.1, pytest-8.3.4, pluggy-1.5.0 -- /Users/lclose/th
 cachedir: .pytest_cache
 rootdir: /Users/lclose/thermal2pro
 configfile: pyproject.toml
-collecting ... collected 7 items
+collecting ... collected 5 items
 
-tests/test_integration.py::TestMockCamera::test_cleanup PASSED           [ 14%]
-tests/test_integration.py::TestMockCamera::test_frame_capture PASSED     [ 28%]
-tests/test_integration.py::TestMockCamera::test_frame_processing PASSED  [ 42%]
-tests/test_integration.py::TestMockCamera::test_frame_saving PASSED      [ 57%]
-tests/test_integration.py::TestMockCamera::test_initialization PASSED    [ 71%]
-tests/test_integration.py::TestImageProcessing::test_colormap_application PASSED [ 85%]
-tests/test_integration.py::TestImageProcessing::test_frame_conversion PASSED [100%]
+tests/test_modes.py::test_mode_lifecycle PASSED                          [ 20%]
+tests/test_modes.py::test_live_view_mode PASSED                          [ 40%]
+tests/test_modes.py::test_mode_switching PASSED                          [ 60%]
+tests/test_modes.py::test_frame_processing PASSED                        [ 80%]
+tests/test_modes.py::test_error_handling PASSED                          [100%]
 
-============================== 7 passed in 0.38s ===============================
+=============================== warnings summary ===============================
+tests/test_modes.py:104
+  /Users/lclose/thermal2pro/tests/test_modes.py:104: PytestCollectionWarning: cannot collect test class 'TestModeImpl' because it has a __init__ constructor (from: tests/test_modes.py)
+    class TestModeImpl(BaseMode):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 5 passed, 1 warning in 0.18s =========================

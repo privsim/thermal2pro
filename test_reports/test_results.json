@@ -2,12 +2,17 @@
   "framework": "pytest",
   "tests": [
     {
-      "name": "test_cleanup",
+      "name": "test_mode_lifecycle",
       "passed": true,
       "output": []
     },
     {
-      "name": "test_frame_capture",
+      "name": "test_live_view_mode",
+      "passed": true,
+      "output": []
+    },
+    {
+      "name": "test_mode_switching",
       "passed": true,
       "output": []
     },
@@ -17,29 +22,19 @@
       "output": []
     },
     {
-      "name": "test_frame_saving",
+      "name": "test_error_handling",
       "passed": true,
-      "output": []
-    },
-    {
-      "name": "test_initialization",
-      "passed": true,
-      "output": []
-    },
-    {
-      "name": "test_colormap_application",
-      "passed": true,
-      "output": []
-    },
-    {
-      "name": "test_frame_conversion",
-      "passed": true,
-      "output": []
+      "output": [
+        "tests/test_modes.py:104",
+        "/Users/lclose/thermal2pro/tests/test_modes.py:104: PytestCollectionWarning: cannot collect test class 'TestModeImpl' because it has a __init__ constructor (from: tests/test_modes.py)",
+        "class TestModeImpl(BaseMode):",
+        "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html"
+      ]
     }
   ],
   "summary": {
-    "total": 7,
-    "passed": 7,
+    "total": 5,
+    "passed": 5,
     "failed": 0
   }
 }

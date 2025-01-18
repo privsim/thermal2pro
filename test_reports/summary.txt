@@ -1,17 +1,15 @@
 Test Results (pytest)
 ====================
 
-Total Tests: 7
-Passed: 7
+Total Tests: 5
+Passed: 5
 Failed: 0
 
 Test Details:
 ------------
 
-✓ test_cleanup
-✓ test_frame_capture
+✓ test_mode_lifecycle
+✓ test_live_view_mode
+✓ test_mode_switching
 ✓ test_frame_processing
-✓ test_frame_saving
-✓ test_initialization
-✓ test_colormap_application
-✓ test_frame_conversion
+✓ test_error_handling
