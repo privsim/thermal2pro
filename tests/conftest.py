@@ -23,16 +23,27 @@ def gtk_settings():
     if settings:
         # Disable animations and transitions for testing
         settings.set_property("gtk-enable-animations", False)
+        # Disable native decorations to avoid window manager interference
+        settings.set_property("gtk-application-prefer-dark-theme", True)
+        # Ensure consistent font rendering
+        settings.set_property("gtk-xft-antialias", 1)
+        settings.set_property("gtk-xft-hinting", 1)
 
 @pytest.fixture(autouse=True)
 def gtk_main_loop():
     """Set up and tear down GTK main loop for tests."""
     context = GLib.MainContext.default()
-    while context.pending():
-        context.iteration(False)
-    yield
-    while context.pending():
-        context.iteration(False)
+    try:
+        # Process any pending events before test
+        while context.pending():
+            context.iteration(False)
+        yield
+    finally:
+        # Ensure event loop is flushed after test
+        timeout = 0
+        while context.pending() and timeout < 100:
+            context.iteration(False)
+            timeout += 1
 
 @pytest.fixture(autouse=True)
 def cleanup_gtk():
@@ -42,9 +53,21 @@ def cleanup_gtk():
         window.destroy()
 
 @pytest.fixture
-def mock_app():
+def mock_app(request):
     """Create a real GTK application for testing."""
-    app = Gtk.Application.new('com.test.thermal2pro', Gio.ApplicationFlags.FLAGS_NONE)
-    app.register()
-    yield app
-    app.quit()
+    # Create unique application ID for each test
+    app_id = f'com.test.thermal2pro.{request.node.name}'
+    app = Gtk.Application.new(app_id, Gio.ApplicationFlags.FLAGS_NONE)
+    
+    try:
+        app.register()
+        yield app
+    finally:
+        # Ensure cleanup happens even if test fails
+        try:
+            app.quit()
+            while Gtk.events_pending():
+                Gtk.main_iteration_do(False)
+        except Exception as e:
+            print(f"Warning: Error during app cleanup: {e}")
+
