@@ -95,6 +95,8 @@ class LiveViewMode(BaseMode):
     def on_fps_toggled(self, button):
         """Handle FPS overlay toggle."""
         self.fps_overlay = button.get_active()
+        # Force redraw
+        self.window.queue_draw()
     
     def on_palette_changed(self, dropdown, *args):
         """Handle palette selection change."""
@@ -105,3 +107,5 @@ class LiveViewMode(BaseMode):
         }
         selected = dropdown.get_selected()
         self.color_palette = palette_map[selected]
+        # Force redraw
+        self.window.queue_draw()

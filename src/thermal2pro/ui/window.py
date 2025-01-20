@@ -60,10 +60,17 @@ class ThermalWindow(Gtk.ApplicationWindow):
         # Create mode buttons
         self.mode_buttons = {}
         for mode in AppMode:
-            button = Gtk.ToggleButton(label=mode.name.replace('_', ' '))
+            button = Gtk.ToggleButton()
+            button.set_label(mode.name.replace('_', ' '))
             button.set_can_focus(True)
+            button.set_has_frame(True)  # Ensure button has visible frame
+            button.set_size_request(120, 50)  # Larger touch targets
             button.connect('toggled', self.on_mode_button_toggled, mode)
-            button.set_size_request(100, 40)
+            # Set CSS classes for styling
+            context = button.get_style_context()
+            context.add_class('mode-button')
+            if mode == AppMode.LIVE_VIEW:  # Set initial active state
+                button.set_active(True)
             mode_bar.append(button)
             self.mode_buttons[mode] = button
 
@@ -172,14 +179,25 @@ class ThermalWindow(Gtk.ApplicationWindow):
         if new_mode:
             new_mode.activate()
             self.mode_buttons[mode].set_active(True)
+            
+        # Force a redraw
+        self.queue_draw()
+        if self.controls_container:
+            self.controls_container.queue_draw()
 
     def on_mode_button_toggled(self, button, mode):
         """Handle mode button toggle."""
+        logger.debug(f"Mode button toggled: {mode.name}, active: {button.get_active()}")
         if button.get_active():
             self.switch_mode(mode)
         elif mode == self.current_mode:
             # Don't allow deactivating current mode button
             button.set_active(True)
+            
+        # Update other buttons
+        for m, btn in self.mode_buttons.items():
+            if m != mode:
+                btn.set_active(False)
 
     def update_frame(self):
         """Update current frame."""
