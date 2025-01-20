@@ -58,6 +58,9 @@ setup_virtual_environment() {
         python3 -m venv "$VENV_DIR"
     fi
     
+    # Create activate.d directory if it doesn't exist
+    mkdir -p "${VENV_DIR}/bin/activate.d"
+
     # Create environment setup file
     cat > "${VENV_DIR}/bin/activate.d/thermal2pro.sh" << 'EOL'
 #!/bin/bash
