@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 import sys
+import gi
+
+# Use GTK 4.0 exclusively
+gi.require_version('Gtk', '4.0')
 try:
-    import gi
-    gi.require_version('Gtk', '4.0')
-except ValueError:
-    gi.require_version('Gtk', '3.0')
+    from gi.repository import Gtk, GLib, Gdk
 except ImportError as e:
-    print("Error: PyGObject not found. Install system dependencies with:")
+    print("Error: PyGObject with GTK4 not found. Install system dependencies with:")
     print("sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 libgirepository1.0-dev")
     print("\nThen install PyGObject in your virtual environment with:")
     print("pip install PyGObject")
     sys.exit(1)
 
-from gi.repository import Gtk, GLib, Gdk
 import cv2
 import numpy as np
 from datetime import datetime
@@ -26,70 +26,38 @@ class ThermalWindow(Gtk.ApplicationWindow):
         self.fullscreen()
 
         # Main vertical box
-        if Gtk._version == "4.0":
-            self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            self.set_child(self.box)
-        else:
-            self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            self.add(self.box)
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.set_child(self.box)
 
         # Camera view area
         self.drawing_area = Gtk.DrawingArea()
-        if Gtk._version == "4.0":
-            self.drawing_area.set_draw_func(self.draw_frame)
-        else:
-            self.drawing_area.connect("draw", self.draw_frame_gtk3)
+        self.drawing_area.set_draw_func(self.draw_frame)
         self.box.append(self.drawing_area)
 
         # Button bar at bottom
         button_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         button_bar.set_spacing(10)
-        if Gtk._version == "4.0":
-            button_bar.set_margin_start(10)
-            button_bar.set_margin_end(10)
-            button_bar.set_margin_bottom(10)
-        else:
-            button_bar.set_margin_left(10)
-            button_bar.set_margin_right(10)
-            button_bar.set_margin_bottom(10)
+        button_bar.set_margin_start(10)
+        button_bar.set_margin_end(10)
+        button_bar.set_margin_bottom(10)
 
         # Large touch-friendly capture button
         capture_button = Gtk.Button(label="Capture")
         capture_button.connect("clicked", self.capture_image)
         capture_button.set_vexpand(False)
         capture_button.set_hexpand(True)
-        if Gtk._version == "4.0":
-            button_bar.append(capture_button)
-        else:
-            button_bar.pack_start(capture_button, True, True, 0)
+        button_bar.append(capture_button)
 
         # Color palette selector
-        if Gtk._version == "4.0":
-            palette_store = Gtk.StringList()
-            for name in ["Iron", "Rainbow", "Gray"]:
-                palette_store.append(name)
-            self.palette_dropdown = Gtk.DropDown(model=palette_store)
-        else:
-            palette_store = Gtk.ListStore(str)
-            for name in ["Iron", "Rainbow", "Gray"]:
-                palette_store.append([name])
-            self.palette_dropdown = Gtk.ComboBox.new_with_model(palette_store)
-            renderer_text = Gtk.CellRendererText()
-            self.palette_dropdown.pack_start(renderer_text, True)
-            self.palette_dropdown.add_attribute(renderer_text, "text", 0)
-
-        self.palette_dropdown.connect("changed" if Gtk._version == "3.0" else "notify::selected", self.change_palette)
+        palette_store = Gtk.StringList()
+        for name in ["Iron", "Rainbow", "Gray"]:
+            palette_store.append(name)
+        self.palette_dropdown = Gtk.DropDown(model=palette_store)
+        self.palette_dropdown.connect("notify::selected", self.change_palette)
         self.palette_dropdown.set_vexpand(False)
         self.palette_dropdown.set_hexpand(True)
-        if Gtk._version == "4.0":
-            button_bar.append(self.palette_dropdown)
-        else:
-            button_bar.pack_start(self.palette_dropdown, True, True, 0)
-
-        if Gtk._version == "4.0":
-            self.box.append(button_bar)
-        else:
-            self.box.pack_start(button_bar, False, False, 0)
+        button_bar.append(self.palette_dropdown)
+        self.box.append(button_bar)
 
         # Initialize camera
         try:
@@ -151,10 +119,6 @@ class ThermalWindow(Gtk.ApplicationWindow):
         ctx.paint()
         ctx.restore()
 
-    def draw_frame_gtk3(self, widget, ctx):
-        return self.draw_frame(widget, ctx, widget.get_allocated_width(), 
-                             widget.get_allocated_height())
-
     def capture_image(self, button):
         if self.current_frame is not None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -177,10 +141,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
             1: cv2.COLORMAP_JET,    # Rainbow
             2: cv2.COLORMAP_BONE    # Gray
         }
-        if Gtk._version == "4.0":
-            selected = dropdown.get_selected()
-        else:
-            selected = dropdown.get_active()
+        selected = dropdown.get_selected()
         self.current_palette = palette_map[selected]
 
     def do_close_request(self):

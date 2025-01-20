@@ -1,124 +1,92 @@
-"""Base class for application modes."""
-import os
-import gi
+"""Base mode implementation."""
+from gi.repository import Gtk
 
-# Use GTK 4.0
-gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, GLib
-import logging
-from abc import ABC, abstractmethod
-import cv2
-import numpy as np
-
-logger = logging.getLogger(__name__)
-
-class BaseMode(ABC):
-    """Abstract base class for application modes."""
+class BaseMode:
+    """Base class for application modes."""
     
     def __init__(self, window):
         """Initialize mode.
         
         Args:
-            window: Parent ThermalWindow instance
+            window: Parent window
         """
         self.window = window
-        self.controls_box = None
         self.is_active = False
-        
-        # Create mode-specific UI
+        self.controls_box = None
         self.create_controls()
-        logger.debug(f"Initialized {self.__class__.__name__}")
-    
-    @abstractmethod
+        
     def create_controls(self):
-        """Create mode-specific UI controls.
+        """Create mode-specific controls.
         
-        This method should create a Gtk.Box containing all mode-specific
-        controls and store it in self.controls_box.
+        Override in subclasses to create mode-specific controls.
+        Must set self.controls_box.
         """
-        pass
-    
-    @abstractmethod
+        raise NotImplementedError
+        
     def process_frame(self, frame):
-        """Process a camera frame.
+        """Process incoming frame.
         
         Args:
-            frame: numpy array containing the camera frame
+            frame: Input frame
             
         Returns:
-            Processed frame as numpy array
+            Processed frame
         """
-        pass
-    
-    def activate(self):
-        """Activate this mode."""
-        if not self.is_active:
-            logger.info(f"Activating {self.__class__.__name__}")
-            self.is_active = True
-            if self.controls_box:
-                self.window.controls_container.append(self.controls_box)
-                self.controls_box.show()
-            self._on_activate()
-    
-    def deactivate(self):
-        """Deactivate this mode."""
-        if self.is_active:
-            logger.info(f"Deactivating {self.__class__.__name__}")
-            self.is_active = False
-            if self.controls_box:
-                self.window.controls_container.remove(self.controls_box)
-            self._on_deactivate()
-    
-    def _on_activate(self):
-        """Called when mode is activated.
+        raise NotImplementedError
         
-        Override this in subclasses to perform mode-specific activation tasks.
-        """
-        pass
-    
-    def _on_deactivate(self):
-        """Called when mode is deactivated.
-        
-        Override this in subclasses to perform mode-specific cleanup tasks.
-        """
-        pass
-    
-    def handle_key_press(self, keyval):
-        """Handle key press events.
-        
-        Args:
-            keyval: Key value from Gdk.EventKey
-            
-        Returns:
-            True if key was handled, False otherwise
-        """
-        return False
-    
-    def update(self):
-        """Update mode state.
-        
-        Called periodically by the main window. Override in subclasses
-        to perform mode-specific updates.
-        
-        Returns:
-            True to continue updates, False to stop
-        """
-        return True
-    
     def draw_overlay(self, ctx, width, height):
-        """Draw mode-specific overlay.
+        """Draw mode overlay.
         
         Args:
             ctx: Cairo context
-            width: Drawing area width
-            height: Drawing area height
+            width: Surface width
+            height: Surface height
         """
         pass
-    
-    def cleanup(self):
-        """Clean up mode resources.
         
-        Called when mode is being destroyed. Override in subclasses
-        to perform final cleanup.
+    def activate(self):
+        """Activate mode."""
+        if self.is_active:
+            return
+            
+        self.is_active = True
+        
+        # Add controls to window
+        if self.controls_box:
+            self.window.controls_container.append(self.controls_box)
+            self.controls_box.set_visible(True)
+        
+        self._on_activate()
+        
+    def deactivate(self):
+        """Deactivate mode."""
+        if not self.is_active:
+            return
+            
+        self._on_deactivate()
+        
+        # Remove controls from window
+        if self.controls_box:
+            self.controls_box.set_visible(False)
+            self.window.controls_container.remove(self.controls_box)
+            
+        self.is_active = False
+        
+    def _on_activate(self):
+        """Handle mode activation.
+        
+        Override in subclasses for mode-specific activation.
         """
-        self.deactivate()
+        pass
+        
+    def _on_deactivate(self):
+        """Handle mode deactivation.
+        
+        Override in subclasses for mode-specific deactivation.
+        """
+        pass
+        
+    def cleanup(self):
+        """Clean up mode resources."""
+        if self.is_active:
+            self.deactivate()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+"""Main window implementation."""
 import os
 import gi
 import sys
@@ -20,11 +20,18 @@ from thermal2pro.ui.modes import AppMode, LiveViewMode
 logger = logging.getLogger(__name__)
 
 class ThermalWindow(Gtk.ApplicationWindow):
-    def __init__(self, app, use_mock_camera=False):
+    """Main application window."""
+    
+    def __init__(self, app):
+        """Initialize window.
+        
+        Args:
+            app: GTK application
+        """
         super().__init__(application=app)
         self.set_title("P2 Pro Thermal")
         
-        # Set default window size
+        # Set window size before creating content
         self.set_default_size(800, 600)
 
         # Main vertical box
@@ -37,15 +44,10 @@ class ThermalWindow(Gtk.ApplicationWindow):
 
         # Camera view area
         self.drawing_area = Gtk.DrawingArea()
-        # Set minimum size to ensure proper rendering
         self.drawing_area.set_size_request(256, 192)
-        # Set expand to fill available space
         self.drawing_area.set_vexpand(True)
         self.drawing_area.set_hexpand(True)
-        
         self.drawing_area.set_draw_func(self.draw_frame)
-        
-        # Add drawing area to box
         self.box.append(self.drawing_area)
 
         # Mode selector bar
@@ -58,15 +60,12 @@ class ThermalWindow(Gtk.ApplicationWindow):
         self.mode_buttons = {}
         for mode in AppMode:
             button = Gtk.ToggleButton(label=mode.name.replace('_', ' '))
-            button.set_can_focus(True)  # Enable keyboard focus
-            button.set_focus_on_click(True)  # Focus when clicked
+            button.set_can_focus(True)
             button.connect('toggled', self.on_mode_button_toggled, mode)
-            # Make buttons larger and more touch-friendly
             button.set_size_request(100, 40)
             mode_bar.append(button)
             self.mode_buttons[mode] = button
 
-        # Add mode bar to main box
         self.box.append(mode_bar)
 
         # Controls container
@@ -75,31 +74,18 @@ class ThermalWindow(Gtk.ApplicationWindow):
         self.controls_container.set_margin_bottom(5)
         self.controls_container.set_margin_start(5)
         self.controls_container.set_margin_end(5)
-
-        # Add controls container to main box
         self.box.append(self.controls_container)
 
         # Initialize camera
         self.cap = None
         try:
-            if use_mock_camera:
-                logger.info("Using mock camera")
-                self.cap = MockThermalCamera()
-            else:
-                logger.info("Attempting to initialize real camera")
-                self.cap = cv2.VideoCapture(0)
-                if not self.cap.isOpened():
-                    raise RuntimeError("Failed to open camera")
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                self.cap.set(cv2.CAP_PROP_FPS, 30)
-            
-            if not self.cap or not self.cap.isOpened():
-                logger.warning("Real camera not available, falling back to mock camera")
-                self.cap = MockThermalCamera()
-            
-            logger.info("Camera initialized successfully")
+            self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
+                raise RuntimeError("Failed to open camera")
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
             
         except Exception as e:
             logger.warning(f"Camera initialization failed: {e}, falling back to mock camera")
@@ -115,30 +101,67 @@ class ThermalWindow(Gtk.ApplicationWindow):
         }
         self.current_mode = None
 
-        # Enable touch events
-        self.set_receives_default(True)
-
         # Start in live view mode
         self.switch_mode(AppMode.LIVE_VIEW)
 
-        # Show all widgets
-        self.show()
-
-        # Center window after showing
+        # Connect to display-configured signal for window positioning
         display = self.get_display()
         if display:
-            # Get primary monitor
-            monitors = display.get_monitors()
-            if monitors:
-                monitor = monitors[0]  # Use primary monitor
-                rect = monitor.get_geometry()
-                # Center the window on the primary monitor
-                self.set_default_size(800, 600)
-                self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
+            display.connect('monitor-added', self._on_monitor_added)
+            display.connect('monitor-removed', self._on_monitor_removed)
+
+        # Set initial position and make visible
+        self._center_window()
+        self.show()
 
         # Update frame every 16ms (targeting 60 FPS max)
         GLib.timeout_add(16, self.update_frame)
         logger.info("Window initialization complete")
+
+    def _on_monitor_added(self, display, monitor):
+        """Handle monitor being connected."""
+        self._center_window()
+
+    def _on_monitor_removed(self, display, monitor):
+        """Handle monitor being disconnected."""
+        self._center_window()
+
+    def _center_window(self):
+        """Center window on screen."""
+        display = self.get_display()
+        if not display:
+            return
+
+        # Get monitors and check if we have any
+        monitors = display.get_monitors()
+        if monitors.get_n_items() == 0:
+            return
+
+        # Get primary monitor geometry
+        monitor = monitors.get_item(0)
+        if not monitor:
+            return
+
+        geometry = monitor.get_geometry()
+        if not geometry:
+            return
+
+        # Get window size
+        width, height = self.get_default_size()
+
+        # Calculate center position
+        x = (geometry.width - width) // 2
+        y = (geometry.height - height) // 2
+
+        # Create surface for window to ensure it's realized
+        self.get_surface()
+        if not self.get_surface():
+            return
+
+        # Move window to center
+        window_handle = self.get_surface()
+        if window_handle:
+            window_handle.set_position(x, y)
 
     def switch_mode(self, mode):
         """Switch to specified mode."""
@@ -179,7 +202,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
                 if mode:
                     # Process frame through current mode
                     self.current_frame = mode.process_frame(frame)
-                    self.drawing_area.queue_draw()
+                    self.queue_draw()  # GTK4 uses queue_draw instead of queue_draw_area
             return True  # Continue updates
         except Exception as e:
             logger.error(f"Error updating frame: {e}")
@@ -202,8 +225,8 @@ class ThermalWindow(Gtk.ApplicationWindow):
             logger.error(f"Error drawing frame: {e}")
             return False
 
-    def do_close_request(self):
-        """Clean up resources when window is closed."""
+    def close(self):
+        """Close window and clean up resources."""
         # Clean up modes
         for mode in self.modes.values():
             mode.cleanup()
@@ -213,4 +236,4 @@ class ThermalWindow(Gtk.ApplicationWindow):
             self.cap.release()
 
         logger.info("Window resources cleaned up")
-        return False
+        super().close()

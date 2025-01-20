@@ -1,3 +1,4 @@
+"""Mock thermal camera for testing."""
 import numpy as np
 import cv2
 import time
@@ -8,6 +9,12 @@ class MockThermalCamera:
     """Mock thermal camera for testing and development."""
     
     def __init__(self, width: int = 256, height: int = 192):
+        """Initialize mock camera.
+        
+        Args:
+            width: Frame width (default: 256)
+            height: Frame height (default: 192)
+        """
         self.width = width
         self.height = height
         self.is_open = True
@@ -25,6 +32,7 @@ class MockThermalCamera:
         
         Returns:
             Tuple of (success, frame)
+            Frame is BGR format (3 channels)
         """
         if not self.is_open:
             return False, None
@@ -47,13 +55,12 @@ class MockThermalCamera:
             # Create BGR frame
             frame = cv2.cvtColor(pattern, cv2.COLOR_GRAY2BGR)
             
-            # Add simulated hot spots
-            hot_spots = [
-                (int(self.width/2 + np.sin(t) * 50), 
-                 int(self.height/2 + np.cos(t) * 30))
-            ]
-            for x, y in hot_spots:
-                cv2.circle(frame, (x, y), 10, (0, 0, 255), -1)
+            # Add simulated hot spots that move in a circle
+            center_x = self.width/2 + np.sin(t) * 50
+            center_y = self.height/2 + np.cos(t) * 30
+            cv2.circle(frame, 
+                      (int(center_x), int(center_y)), 
+                      10, (0, 0, 255), -1)
             
             # Simulate frame timing
             current_time = time.time()
@@ -76,6 +83,25 @@ class MockThermalCamera:
             True if camera is open
         """
         return self.is_open
+        
+    def get(self, prop_id: int) -> float:
+        """Get a camera property.
+        
+        Args:
+            prop_id: Property identifier
+            
+        Returns:
+            Property value
+        """
+        if prop_id == cv2.CAP_PROP_FRAME_WIDTH:
+            return float(self.width)
+        elif prop_id == cv2.CAP_PROP_FRAME_HEIGHT:
+            return float(self.height)
+        elif prop_id == cv2.CAP_PROP_FPS:
+            return 30.0
+        elif prop_id == cv2.CAP_PROP_BUFFERSIZE:
+            return 1.0
+        return 0.0
         
     def set(self, prop_id: int, value: float) -> bool:
         """Set a camera property.
@@ -100,22 +126,3 @@ class MockThermalCamera:
             # Simulate buffer size setting
             return True
         return False
-        
-    def get(self, prop_id: int) -> float:
-        """Get a camera property.
-        
-        Args:
-            prop_id: Property identifier
-            
-        Returns:
-            Property value
-        """
-        if prop_id == cv2.CAP_PROP_FRAME_WIDTH:
-            return float(self.width)
-        elif prop_id == cv2.CAP_PROP_FRAME_HEIGHT:
-            return float(self.height)
-        elif prop_id == cv2.CAP_PROP_FPS:
-            return 30.0
-        elif prop_id == cv2.CAP_PROP_BUFFERSIZE:
-            return 1.0
-        return 0.0

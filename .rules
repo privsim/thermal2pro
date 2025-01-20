@@ -1,0 +1,75 @@
+# Thermal2Pro Project Rules
+
+## GTK Version (GTK4)
+
+This project uses GTK4 as its primary UI toolkit. This decision was made for the following reasons:
+
+1. Future Proofing
+- GTK4 provides modern scene graph architecture
+- Better touch and gesture support for thermal camera interface
+- GPU acceleration capabilities for image processing
+- Forward compatibility with newer systems
+
+2. Technical Requirements
+- Hardware acceleration for real-time thermal imaging
+- Modern input handling for touchscreen support
+- Native support for high DPI displays
+- Better widget composition model
+
+3. Dependencies
+- GTK4: >= 4.0
+- PyGObject with GTK4 bindings
+- System requirements: gir1.2-gtk-4.0
+
+### Version Compatibility Notes
+
+While the codebase includes some GTK3 compatibility code, this is for legacy support only. 
+New development should:
+- Use GTK4 APIs exclusively
+- Target GTK4 widget patterns
+- Use GTK4-specific features where beneficial
+- Remove GTK3 fallback code when updating modules
+
+### Testing Requirements
+
+Tests should:
+- Use GTK4 for widget testing
+- Mock at the GTK4 widget level
+- Use proper GTK4 test fixtures
+- Include display server handling (Wayland/X11)
+
+### Development Setup
+
+Required system packages:
+```bash
+# Ubuntu/Debian
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 libgirepository1.0-dev
+
+# Fedora
+sudo dnf install python3-gobject gtk4-devel
+
+# Arch
+sudo pacman -S python-gobject gtk4
+```
+
+### Migration Notes
+
+When working with existing code:
+1. Replace GTK3-specific calls with GTK4 equivalents
+2. Update signal handling to GTK4 patterns
+3. Use modern GTK4 widget hierarchy
+4. Remove compatibility layers when updating modules
+
+## Code Organization
+
+### UI Components
+- Use class-based widgets
+- Implement draw_func for custom rendering
+- Use GTK4 composite templates where appropriate
+- Follow GTK4 event propagation model
+
+### Camera Interface
+- Use GLib main loop for frame updates
+- Implement proper resource cleanup
+- Use GTK4 native signals for events
+- Handle device hot-plugging

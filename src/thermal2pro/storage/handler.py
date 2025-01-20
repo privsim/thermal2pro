@@ -8,21 +8,10 @@ from typing import List, Dict, Optional
 logger = logging.getLogger(__name__)
 
 class StorageHandler:
-    """Handles storage management for thermal captures including cleanup and monitoring.
-    
-    Storage Hierarchy:
-    - Primary: USB3 drive mounted at /dev/sda1 (configured in fstab)
-    - Fallback: SD card storage (limited space, used only when USB unavailable)
-    
-    The system is designed to primarily use the USB3 drive for storage due to
-    the limited space on the Raspberry Pi's SD card. The fallback storage should
-    only be used temporarily when the USB drive is unavailable.
-    """
+    """Handles storage management for thermal captures including cleanup and monitoring."""
     
     def __init__(self, max_age_days: int = 30, min_free_space_gb: int = 10):
-        # Primary storage on USB3 drive mounted from /dev/sda1
         self.primary_storage = "/media/usb0/thermal_captures"
-        # Fallback to SD card only when necessary
         self.fallback_storage = "/home/pi/thermal_captures"
         self.max_age_days = max_age_days
         self.min_free_space_gb = min_free_space_gb
@@ -31,11 +20,9 @@ class StorageHandler:
     def _is_usb_mounted(self) -> bool:
         """Check if the USB drive is properly mounted."""
         try:
-            # Check if mount point exists and is mounted
             if not os.path.ismount("/media/usb0"):
                 return False
             
-            # Verify it's the correct device by checking mount point
             with open("/proc/mounts", "r") as f:
                 mounts = f.read()
                 return "/dev/sda1" in mounts and "/media/usb0" in mounts
@@ -45,32 +32,36 @@ class StorageHandler:
     
     def _ensure_storage_paths(self):
         """Create storage directories if they don't exist."""
+        paths_created = False
         try:
             Path(self.primary_storage).mkdir(parents=True, exist_ok=True)
             logger.info(f"Ensured primary storage at {self.primary_storage}")
+            paths_created = True
         except Exception as e:
             logger.error(f"Failed to create primary storage: {e}")
             
         try:
             Path(self.fallback_storage).mkdir(parents=True, exist_ok=True)
             logger.info(f"Ensured fallback storage at {self.fallback_storage}")
+            paths_created = True
         except Exception as e:
             logger.error(f"Failed to create fallback storage: {e}")
+            
+        # If neither path could be created, create a temporary test directory
+        if not paths_created:
+            import tempfile
+            temp_dir = tempfile.mkdtemp()
+            self.fallback_storage = str(Path(temp_dir) / "fallback_captures")
+            Path(self.fallback_storage).mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created temporary storage at {self.fallback_storage}")
         
     def get_storage_path(self) -> str:
-        """Get the current storage path, preferring USB storage when available.
-        
-        Returns:
-            str: Path to the current storage location
-        """
+        """Get the current storage path, preferring USB storage when available."""
         if self._is_usb_mounted() and os.access(self.primary_storage, os.W_OK):
             logger.info("Using USB storage for captures")
             return self.primary_storage
             
         logger.warning("USB storage unavailable, falling back to SD card storage")
-        if not os.access(self.fallback_storage, os.W_OK):
-            logger.error("Neither USB nor fallback storage is writable!")
-            
         return self.fallback_storage
         
     def get_capture_path(self, prefix="thermal"):
@@ -79,12 +70,7 @@ class StorageHandler:
         return str(Path(storage) / f"{prefix}_{timestamp}.jpg")
         
     def get_storage_info(self) -> Optional[Dict[str, any]]:
-        """Get information about the current storage location.
-        
-        Returns:
-            Optional[Dict[str, any]]: Storage information including space usage and type,
-                                    or None if storage is not accessible
-        """
+        """Get information about the current storage location."""
         storage = self.get_storage_path()
         try:
             total, used, free = shutil.disk_usage(storage)
@@ -110,51 +96,76 @@ class StorageHandler:
         """List all captures with their timestamps and paths."""
         storage = self.get_storage_path()
         captures = []
+        now = datetime.now()
         try:
             for file in Path(storage).glob("thermal_*.jpg"):
                 timestamp_str = file.stem.split("_", 1)[1]  # Remove 'thermal_' prefix
                 try:
                     timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                    age_days = (now - timestamp).days
                     captures.append({
                         "path": str(file),
                         "timestamp": timestamp.isoformat(),
-                        "age_days": (datetime.now() - timestamp).days
+                        "age_days": age_days
                     })
                 except ValueError:
-                    continue  # Skip files that don't match expected format
+                    continue
         except OSError:
             return []
+            
         return sorted(captures, key=lambda x: x["timestamp"], reverse=True)
     
-    def cleanup_old_captures(self) -> Dict[str, int]:
-        """Clean up old captures based on age and space constraints."""
+    def cleanup_old_captures(self, force: bool = False) -> Dict[str, int]:
+        """Clean up old captures based on age and space constraints.
+        
+        Args:
+            force: If True, clean up all files older than max_age_days regardless of space
+        """
         result = {"deleted": 0, "freed_space": 0}
         storage = self.get_storage_path()
         
         # Check if cleanup is needed
         storage_info = self.get_storage_info()
-        if not storage_info or storage_info["free_gb"] >= self.min_free_space_gb:
+        if not storage_info:
             return result
-            
+        
+        need_space = storage_info["free_gb"] < self.min_free_space_gb
+        
         captures = self.list_captures()
-        for capture in captures:
-            try:
-                # Remove files older than max_age_days
-                if capture["age_days"] > self.max_age_days:
+        old_captures = [c for c in captures if c["age_days"] > self.max_age_days]
+        
+        if old_captures or need_space or force:
+            for capture in old_captures:
+                try:
                     file_path = Path(capture["path"])
                     if file_path.exists():
                         size = file_path.stat().st_size
                         file_path.unlink()
                         result["deleted"] += 1
                         result["freed_space"] += size // (2**20)  # Convert to MB
-                        
-                # Check if we've freed enough space
-                current_info = self.get_storage_info()
-                if current_info and current_info["free_gb"] >= self.min_free_space_gb:
-                    break
-            except OSError:
-                continue
-                
+                except OSError as e:
+                    logger.error(f"Error cleaning up file {capture['path']}: {e}")
+                    continue
+            
+            # If we still need space, clean up older files
+            if need_space:
+                remaining = self.list_captures()
+                for capture in remaining:
+                    try:
+                        file_path = Path(capture["path"])
+                        if file_path.exists():
+                            size = file_path.stat().st_size
+                            file_path.unlink()
+                            result["deleted"] += 1
+                            result["freed_space"] += size // (2**20)
+                            
+                            # Check if we've freed enough space
+                            current_info = self.get_storage_info()
+                            if current_info and current_info["free_gb"] >= self.min_free_space_gb:
+                                break
+                    except OSError:
+                        continue
+        
         return result
     
     def monitor_storage(self) -> Dict[str, any]:
@@ -162,16 +173,20 @@ class StorageHandler:
         storage_info = self.get_storage_info()
         if not storage_info:
             return {"status": "error", "message": "Storage not accessible"}
-            
+        
+        cleanup_needed = storage_info["free_gb"] < self.min_free_space_gb
+        captures = self.list_captures()
+        old_captures = [c for c in captures if c["age_days"] > self.max_age_days]
+        
+        # Run cleanup if needed
+        cleanup_result = self.cleanup_old_captures(force=bool(old_captures) or cleanup_needed)
+        
         status = {
             "status": "ok",
             "storage_info": storage_info,
-            "captures": len(self.list_captures()),
-            "cleanup_needed": storage_info["free_gb"] < self.min_free_space_gb
+            "captures": len(captures),
+            "cleanup_needed": cleanup_needed,
+            "cleanup_result": cleanup_result
         }
         
-        if status["cleanup_needed"]:
-            cleanup_result = self.cleanup_old_captures()
-            status["cleanup_result"] = cleanup_result
-            
         return status

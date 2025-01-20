@@ -1,168 +1,107 @@
 """Live view mode implementation."""
-import os
-import gi
-
-# Use GTK 4.0
-gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
-import logging
 import cv2
 import numpy as np
+import logging
 from .base_mode import BaseMode
+import cairo
 
 logger = logging.getLogger(__name__)
 
-# OpenCV colormap constants
-COLORMAP_IRON = cv2.COLORMAP_HOT    # 11
-COLORMAP_RAINBOW = cv2.COLORMAP_JET  # 2
-COLORMAP_GRAY = cv2.COLORMAP_BONE   # 3
-
 class LiveViewMode(BaseMode):
-    """Real-time thermal camera display mode."""
+    """Mode for displaying live thermal camera feed."""
     
     def __init__(self, window):
-        """Initialize live view mode.
-        
-        Args:
-            window: Parent ThermalWindow instance
-        """
-        # Initialize instance variables before super().__init__
-        self.fps_overlay = True
-        self.color_palette = COLORMAP_RAINBOW  # Start with rainbow (JET) palette
-        self.frame_count = 0
-        self.last_fps_time = 0
-        self.current_fps = 0
-        self.fps_button = None
-        self.palette_dropdown = None
-        
         super().__init__(window)
-    
+        self.fps_overlay = True
+        self.color_palette = cv2.COLORMAP_JET
+        self.frame_count = 0
+        self.last_fps_update = GLib.get_monotonic_time()
+        self.current_fps = 0
+        
     def create_controls(self):
-        """Create live view controls."""
+        """Create mode-specific controls."""
         self.controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.controls_box.set_spacing(10)
-        self.controls_box.set_margin_start(5)
-        self.controls_box.set_margin_end(5)
         
-        # Palette selector
+        # FPS overlay toggle
+        self.fps_button = Gtk.ToggleButton(label="FPS Overlay")
+        self.fps_button.set_active(True)
+        self.fps_button.connect("toggled", self.on_fps_toggled)
+        self.controls_box.append(self.fps_button)
+        
+        # Color palette selector
         palette_store = Gtk.StringList()
         for name in ["Iron", "Rainbow", "Gray"]:
             palette_store.append(name)
         self.palette_dropdown = Gtk.DropDown(model=palette_store)
-        # Set initial selection to Rainbow
-        self.palette_dropdown.set_selected(1)
-        
         self.palette_dropdown.connect("notify::selected", self.on_palette_changed)
-        
-        # Make dropdown larger and more touch-friendly
-        self.palette_dropdown.set_size_request(120, 40)
-        
-        # FPS toggle button
-        self.fps_button = Gtk.ToggleButton(label="FPS")
-        self.fps_button.set_can_focus(True)
-        self.fps_button.set_active(self.fps_overlay)
-        self.fps_button.connect("toggled", self.on_fps_toggled)
-        
-        # Make button larger and more touch-friendly
-        self.fps_button.set_size_request(80, 40)
-        
-        # Add controls to box
         self.controls_box.append(self.palette_dropdown)
-        self.controls_box.append(self.fps_button)
-    
+        
     def process_frame(self, frame):
-        """Process camera frame.
+        """Process incoming frame.
         
         Args:
-            frame: BGR format frame from camera
+            frame: Input frame (grayscale or BGR)
             
         Returns:
-            Processed RGB frame
+            Processed frame (BGR)
         """
         try:
-            # Convert to grayscale
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Update FPS counter
+            self.frame_count += 1
+            current_time = GLib.get_monotonic_time()
+            time_elapsed = current_time - self.last_fps_update
             
-            # Apply color palette
+            if time_elapsed >= 1000000:  # Update FPS every second
+                self.current_fps = self.frame_count * 1000000 / time_elapsed
+                self.frame_count = 0
+                self.last_fps_update = current_time
+            
+            # Convert BGR to grayscale if needed
+            if len(frame.shape) == 3:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = frame
+            
+            # Apply color mapping
             colored = cv2.applyColorMap(gray, self.color_palette)
             
-            # Convert to RGB for display
-            rgb = cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)
+            # Return as BGR (no need to convert)
+            return colored
             
-            # Update FPS calculation
-            self.frame_count += 1
-            current_time = GLib.get_monotonic_time() / 1000000  # Convert to seconds
-            if current_time - self.last_fps_time >= 1.0:
-                self.current_fps = self.frame_count / (current_time - self.last_fps_time)
-                self.frame_count = 0
-                self.last_fps_time = current_time
-            
-            return rgb
         except Exception as e:
             logger.error(f"Error processing frame: {e}")
-            return frame  # Return original frame on error
+            return frame
     
-    def draw_overlay(self, ctx, width, height):
+    def draw_overlay(self, ctx: cairo.Context, width: int, height: int):
         """Draw mode overlay.
         
         Args:
             ctx: Cairo context
-            width: Drawing area width
-            height: Drawing area height
+            width: Surface width
+            height: Surface height
         """
-        if self.fps_overlay:
-            # Draw FPS counter
-            ctx.save()
-            ctx.set_source_rgba(0, 0, 0, 0.7)
-            ctx.rectangle(10, 10, 100, 30)
-            ctx.fill()
+        if not self.fps_overlay:
+            return
             
-            ctx.set_source_rgb(1, 1, 1)
-            ctx.select_font_face("monospace")
-            ctx.set_font_size(14)
-            ctx.move_to(20, 30)
-            ctx.show_text(f"FPS: {self.current_fps:.1f}")
-            
-            ctx.restore()
-    
-    def on_palette_changed(self, dropdown, *args):
-        """Handle palette selection change."""
-        palette_map = {
-            0: COLORMAP_IRON,    # Iron
-            1: COLORMAP_RAINBOW, # Rainbow
-            2: COLORMAP_GRAY     # Gray
-        }
-        selected = dropdown.get_selected()
-        self.color_palette = palette_map[selected]
-        logger.debug(f"Color palette changed to: {selected}")
+        # Draw FPS counter
+        ctx.set_source_rgb(1, 1, 1)
+        ctx.select_font_face("monospace", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        ctx.set_font_size(20)
+        ctx.move_to(10, 30)
+        ctx.show_text(f"FPS: {self.current_fps:.1f}")
     
     def on_fps_toggled(self, button):
         """Handle FPS overlay toggle."""
         self.fps_overlay = button.get_active()
-        logger.debug(f"FPS overlay {'enabled' if self.fps_overlay else 'disabled'}")
     
-    def _on_activate(self):
-        """Handle mode activation."""
-        # Reset FPS calculation
-        self.frame_count = 0
-        self.last_fps_time = GLib.get_monotonic_time() / 1000000
-        self.current_fps = 0
-    
-    def _on_deactivate(self):
-        """Handle mode deactivation."""
-        pass
-    
-    def handle_key_press(self, keyval):
-        """Handle key press events.
-        
-        Args:
-            keyval: Key value from Gdk.EventKey
-            
-        Returns:
-            True if key was handled, False otherwise
-        """
-        # F key toggles FPS overlay
-        if keyval == ord('f') or keyval == ord('F'):
-            self.fps_button.set_active(not self.fps_overlay)
-            return True
-        return False
+    def on_palette_changed(self, dropdown, *args):
+        """Handle palette selection change."""
+        palette_map = {
+            0: cv2.COLORMAP_HOT,    # Iron
+            1: cv2.COLORMAP_JET,    # Rainbow
+            2: cv2.COLORMAP_BONE    # Gray
+        }
+        selected = dropdown.get_selected()
+        self.color_palette = palette_map[selected]
