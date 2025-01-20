@@ -1,78 +1,68 @@
 """Tests for the mode management system."""
-import gi
-gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, Gio, GObject
 import pytest
 from unittest.mock import MagicMock, patch
 import numpy as np
 import cv2
+import gi
 import cairo
+
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk, Gio, GObject
 
 from thermal2pro.ui.modes import AppMode, BaseMode, LiveViewMode
 from thermal2pro.camera.mock_camera import MockThermalCamera
 from thermal2pro.ui.window import ThermalWindow
 
-class TestThermalWindow(ThermalWindow):
-    """Test version of ThermalWindow."""
-    def __init__(self, app, use_mock_camera=False):
-        super().__init__(app)
-        # Override camera creation for testing
-        if use_mock_camera:
-            self.cap = MockThermalCamera()
-        else:
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
-                self.cap = MockThermalCamera()
+@pytest.fixture
+def mock_window():
+    """Create a mock window."""
+    window = MagicMock()
+    window.controls_container = Gtk.Box()
+    window.controls_container.append = MagicMock()
+    window.controls_container.remove = MagicMock()
+    window.controls_container.set_visible = MagicMock()
+    return window
+
+@pytest.fixture
+def test_mode(mock_window):
+    """Create a test mode instance."""
+    class TestModeImpl(BaseMode):
+        def __init__(self, window):
+            self.create_controls_called = False
+            self.process_frame_called = False
+            self.draw_overlay_called = False
+            self.on_activate_called = False
+            self.on_deactivate_called = False
+            self.cleanup_called = False
+            super().__init__(window)
+        
+        def create_controls(self):
+            self.controls_box = Gtk.Box()
+            self.create_controls_called = True
+        
+        def process_frame(self, frame):
+            self.process_frame_called = True
+            return frame
+        
+        def draw_overlay(self, ctx, width, height):
+            self.draw_overlay_called = True
+        
+        def _on_activate(self):
+            self.on_activate_called = True
+        
+        def _on_deactivate(self):
+            self.on_deactivate_called = True
+        
+        def cleanup(self):
+            self.cleanup_called = True
+            super().cleanup()
+    
+    return TestModeImpl(mock_window)
 
 class TestModes:
     """Test mode functionality."""
     
-    @pytest.fixture
-    def mock_window(self):
-        """Create a mock window."""
-        window = MagicMock()
-        window.controls_container = Gtk.Box()
-        window.controls_container.append = MagicMock()
-        window.controls_container.remove = MagicMock()
-        window.controls_container.set_visible = MagicMock()
-        return window
-
-    @pytest.fixture
-    def test_mode(self, mock_window):
-        """Create a test mode instance."""
-        class TestModeImpl(BaseMode):
-            def __init__(self, window):
-                self.create_controls_called = False
-                self.process_frame_called = False
-                self.draw_overlay_called = False
-                self.on_activate_called = False
-                self.on_deactivate_called = False
-                self.cleanup_called = False
-                super().__init__(window)
-            
-            def create_controls(self):
-                self.controls_box = Gtk.Box()
-                self.create_controls_called = True
-            
-            def process_frame(self, frame):
-                self.process_frame_called = True
-                return frame
-            
-            def draw_overlay(self, ctx, width, height):
-                self.draw_overlay_called = True
-            
-            def _on_activate(self):
-                self.on_activate_called = True
-            
-            def _on_deactivate(self):
-                self.on_deactivate_called = True
-            
-            def cleanup(self):
-                self.cleanup_called = True
-                super().cleanup()
-        
-        return TestModeImpl(mock_window)
-
+    @pytest.mark.gtk
     def test_mode_lifecycle(self, test_mode):
         """Test mode lifecycle (activation, deactivation, cleanup)."""
         # Test initial state
@@ -95,6 +85,7 @@ class TestModes:
         assert test_mode.cleanup_called
         assert not test_mode.is_active
 
+    @pytest.mark.gtk
     def test_live_view_mode(self, mock_window):
         """Test LiveViewMode functionality."""
         mode = LiveViewMode(mock_window)
@@ -125,26 +116,29 @@ class TestModes:
         mode.cleanup()
         assert not mode.is_active
 
+    @pytest.mark.gtk
     def test_mode_switching(self, mock_app):
         """Test mode switching in window."""
-        window = TestThermalWindow(mock_app, use_mock_camera=True)
-        
-        try:
-            # Verify initial mode
-            assert window.current_mode == AppMode.LIVE_VIEW
-            assert window.modes[AppMode.LIVE_VIEW].is_active
-            
-            # Test mode button toggling
-            for mode in AppMode:
-                if mode in window.modes:
-                    button = window.mode_buttons[mode]
-                    button.set_active(True)
-                    window.on_mode_button_toggled(button, mode)
-                    assert window.current_mode == mode
-                    assert window.modes[mode].is_active
-        finally:
-            window.close()
+        with patch('thermal2pro.ui.window.ThermalWindow._update_window_position'):
+            window = ThermalWindow(mock_app)
+            try:
+                # Verify initial mode
+                assert window.current_mode == AppMode.LIVE_VIEW
+                assert window.modes[AppMode.LIVE_VIEW].is_active
+                
+                # Test mode button toggling
+                for mode in AppMode:
+                    if mode in window.modes:
+                        button = window.mode_buttons[mode]
+                        button.set_active(True)
+                        window.on_mode_button_toggled(button, mode)
+                        assert window.current_mode == mode
+                        assert window.modes[mode].is_active
+            finally:
+                window.close()
+                window.destroy()
 
+    @pytest.mark.gtk
     def test_frame_processing(self, mock_window):
         """Test frame processing through modes."""
         mode = LiveViewMode(mock_window)
@@ -161,6 +155,7 @@ class TestModes:
         assert processed.shape == (192, 256, 3)  # Should be BGR
         assert np.any(processed != 0)  # Should have color mapping applied
 
+    @pytest.mark.gtk
     def test_overlay_drawing(self, mock_window):
         """Test overlay drawing functionality."""
         mode = LiveViewMode(mock_window)

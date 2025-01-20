@@ -1,134 +1,122 @@
 """Tests for UI components."""
-from gi.repository import Gtk, GLib, Gdk
 import pytest
 from unittest.mock import MagicMock, patch
 import numpy as np
 import cv2
+import gi
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk, GLib, Gdk
 
 from thermal2pro.ui.window import ThermalWindow
+from thermal2pro.ui.modes import AppMode
 from thermal2pro.camera.mock_camera import MockThermalCamera
-from thermal2pro.ui.cairo_handler import CairoSurfaceHandler
 
-class TestThermalWindow(ThermalWindow):
-    """Test version of ThermalWindow."""
-    def __init__(self, app, use_mock_camera=False):
-        super().__init__(app)
-        
-        # Override camera creation for testing
-        if use_mock_camera:
-            self.cap = MockThermalCamera()
-        else:
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
-                self.cap = MockThermalCamera()
+@pytest.fixture
+def test_window(mock_app):
+    """Create a test window fixture."""
+    with patch('thermal2pro.ui.window.ThermalWindow._update_window_position'):
+        window = ThermalWindow(mock_app)
+        yield window
+        window.close()
+        window.destroy()
 
 class TestWindow:
     """Test window functionality."""
     
-    def test_window_initialization(self, mock_app):
+    @pytest.mark.gtk
+    def test_window_initialization(self, test_window):
         """Test window initialization."""
-        with patch('thermal2pro.ui.window.MockThermalCamera'):
-            window = TestThermalWindow(mock_app, use_mock_camera=True)
-            assert isinstance(window, Gtk.ApplicationWindow)
-            assert window.get_title() == "P2 Pro Thermal"
-            window.close()
-            window.destroy()
+        assert isinstance(test_window, Gtk.ApplicationWindow)
+        assert test_window.get_title() == "P2 Pro Thermal"
 
+    @pytest.mark.gtk
     def test_camera_fallback(self, mock_app):
         """Test camera initialization fallback."""
         with patch('cv2.VideoCapture') as mock_cv2:
             # Make real camera fail
             mock_cv2.return_value.isOpened.return_value = False
             
-            # Should fall back to mock camera
-            window = TestThermalWindow(mock_app, use_mock_camera=False)
-            assert isinstance(window.cap, MockThermalCamera)
-            window.close()
-            window.destroy()
+            window = ThermalWindow(mock_app)
+            try:
+                assert isinstance(window.cap, MockThermalCamera)
+            finally:
+                window.close()
+                window.destroy()
 
-    def test_frame_processing(self, mock_app):
+    @pytest.mark.gtk
+    def test_frame_processing(self, test_window):
         """Test frame processing pipeline."""
-        with patch('thermal2pro.ui.window.MockThermalCamera'):
-            window = TestThermalWindow(mock_app, use_mock_camera=True)
-            
-            # Create test frame
-            frame = np.zeros((192, 256), dtype=np.uint8)  # Grayscale frame
-            frame[50:150, 50:150] = 255  # Add white square
-            
-            # Mock camera read
-            window.cap.read = MagicMock(return_value=(True, frame))
-            
-            # Process frame
-            assert window.update_frame()
-            assert window.current_frame is not None
-            assert window.current_frame.shape == (192, 256, 3)  # Should be RGB
-            window.close()
-            window.destroy()
+        # Create test frame
+        frame = np.zeros((192, 256), dtype=np.uint8)  # Grayscale frame
+        frame[50:150, 50:150] = 255  # Add white square
+        
+        # Mock camera read
+        test_window.cap.read = MagicMock(return_value=(True, frame))
+        
+        # Process frame
+        assert test_window.update_frame()
+        assert test_window.current_frame is not None
+        assert test_window.current_frame.shape == (192, 256, 3)  # Should be RGB
 
-    def test_window_cleanup(self, mock_app):
+    @pytest.mark.gtk
+    def test_window_cleanup(self, test_window):
         """Test window cleanup."""
-        with patch('thermal2pro.ui.window.MockThermalCamera'):
-            window = TestThermalWindow(mock_app, use_mock_camera=True)
-            
-            # Mock camera
-            window.cap = MagicMock()
-            
-            # Trigger cleanup
-            window.close()
-            
-            # Verify camera released
-            window.cap.release.assert_called_once()
-            window.destroy()
+        # Mock camera
+        test_window.cap = MagicMock()
+        
+        # Trigger cleanup
+        test_window.close()
+        
+        # Verify camera released
+        test_window.cap.release.assert_called_once()
 
-    def test_drawing_area(self, mock_app):
+    @pytest.mark.gtk
+    def test_drawing_area(self, test_window):
         """Test drawing area setup."""
-        with patch('thermal2pro.ui.window.MockThermalCamera'):
-            window = TestThermalWindow(mock_app, use_mock_camera=True)
-            
-            # Verify drawing area properties
-            assert window.drawing_area is not None
-            assert isinstance(window.drawing_area, Gtk.DrawingArea)
-            assert window.drawing_area.get_vexpand()
-            assert window.drawing_area.get_hexpand()
-            window.close()
-            window.destroy()
+        # Verify drawing area properties
+        assert test_window.drawing_area is not None
+        assert isinstance(test_window.drawing_area, Gtk.DrawingArea)
+        assert test_window.drawing_area.get_vexpand()
+        assert test_window.drawing_area.get_hexpand()
 
-    def test_error_handling(self, mock_app):
+    @pytest.mark.gtk
+    def test_error_handling(self, test_window):
         """Test error handling in frame processing."""
-        with patch('thermal2pro.ui.window.MockThermalCamera'):
-            window = TestThermalWindow(mock_app, use_mock_camera=True)
-            
-            # Make camera read fail
-            window.cap.read = MagicMock(return_value=(False, None))
-            
-            # Should handle error gracefully
-            assert window.update_frame()  # Returns True to continue updates
-            assert window.current_frame is None
-            window.close()
-            window.destroy()
+        # Make camera read fail
+        test_window.cap.read = MagicMock(return_value=(False, None))
+        
+        # Should handle error gracefully
+        assert test_window.update_frame()  # Returns True to continue updates
+        assert test_window.current_frame is None
 
-    def test_resize_handling(self, mock_app):
+    @pytest.mark.gtk
+    def test_resize_handling(self, test_window):
         """Test window resize handling."""
-        with patch('thermal2pro.ui.window.MockThermalCamera'):
-            window = TestThermalWindow(mock_app, use_mock_camera=True)
-            
-            # Test resizing
-            window.set_default_size(1024, 768)
-            assert window.get_default_size() == (1024, 768)
-            window.close()
-            window.destroy()
+        # Test resizing
+        test_window.set_default_size(1024, 768)
+        assert test_window.get_default_size() == (1024, 768)
 
-    def test_mode_button_interaction(self, mock_app):
+    @pytest.mark.gtk
+    def test_mode_button_interaction(self, test_window):
         """Test mode button interactions."""
-        with patch('thermal2pro.ui.window.MockThermalCamera'):
-            window = TestThermalWindow(mock_app, use_mock_camera=True)
+        # Test only available modes
+        available_modes = [mode for mode in AppMode if mode in test_window.modes]
+        
+        # Get original mode
+        initial_mode = test_window.current_mode
+        assert initial_mode in available_modes
+        assert test_window.modes[initial_mode].is_active
+        
+        # Test mode switching
+        for mode in available_modes:
+            button = test_window.mode_buttons[mode]
+            button.set_active(True)
+            test_window.on_mode_button_toggled(button, mode)
+            assert test_window.current_mode == mode
+            assert test_window.modes[mode].is_active
             
-            # Test mode switching
-            for mode in window.mode_buttons:
-                button = window.mode_buttons[mode]
-                button.set_active(True)
-                window.on_mode_button_toggled(button, mode)
-                assert window.current_mode == mode
-            
-            window.close()
-            window.destroy()
+            # Test deactivation attempt (should stay active)
+            button.set_active(False)
+            test_window.on_mode_button_toggled(button, mode)
+            assert test_window.current_mode == mode
+            assert button.get_active()  # Button should stay active

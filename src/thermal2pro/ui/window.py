@@ -2,6 +2,7 @@
 import os
 import gi
 import sys
+import platform
 
 # Use GTK 4.0
 gi.require_version('Gtk', '4.0')
@@ -104,64 +105,48 @@ class ThermalWindow(Gtk.ApplicationWindow):
         # Start in live view mode
         self.switch_mode(AppMode.LIVE_VIEW)
 
-        # Connect to display-configured signal for window positioning
-        display = self.get_display()
-        if display:
-            display.connect('monitor-added', self._on_monitor_added)
-            display.connect('monitor-removed', self._on_monitor_removed)
-
-        # Set initial position and make visible
-        self._center_window()
-        self.show()
+        # Show window - GTK4 uses set_visible instead of show/show_all
+        self.set_visible(True)
 
         # Update frame every 16ms (targeting 60 FPS max)
         GLib.timeout_add(16, self.update_frame)
         logger.info("Window initialization complete")
 
-    def _on_monitor_added(self, display, monitor):
-        """Handle monitor being connected."""
-        self._center_window()
+    def _on_monitor_changed(self, display, monitor=None):
+        """Handle monitor configuration changes."""
+        if self.get_visible():
+            self._update_window_position()
 
-    def _on_monitor_removed(self, display, monitor):
-        """Handle monitor being disconnected."""
-        self._center_window()
+    def _update_window_position(self):
+        """Update window position based on current monitor configuration."""
+        try:
+            display = self.get_display()
+            if not display:
+                return
 
-    def _center_window(self):
-        """Center window on screen."""
-        display = self.get_display()
-        if not display:
-            return
+            # Get monitors list
+            monitors = display.get_monitors()
+            if monitors.get_n_items() == 0:
+                return
 
-        # Get monitors and check if we have any
-        monitors = display.get_monitors()
-        if monitors.get_n_items() == 0:
-            return
+            # Get primary monitor
+            monitor = monitors.get_item(0)
+            geometry = monitor.get_geometry()
 
-        # Get primary monitor geometry
-        monitor = monitors.get_item(0)
-        if not monitor:
-            return
+            # Calculate center position
+            width = geometry.width
+            height = geometry.height
+            window_size = self.get_default_size()
 
-        geometry = monitor.get_geometry()
-        if not geometry:
-            return
+            x = (width - window_size[0]) // 2 if width > window_size[0] else 0
+            y = (height - window_size[1]) // 2 if height > window_size[1] else 0
 
-        # Get window size
-        width, height = self.get_default_size()
-
-        # Calculate center position
-        x = (geometry.width - width) // 2
-        y = (geometry.height - height) // 2
-
-        # Create surface for window to ensure it's realized
-        self.get_surface()
-        if not self.get_surface():
-            return
-
-        # Move window to center
-        window_handle = self.get_surface()
-        if window_handle:
-            window_handle.set_position(x, y)
+            # Get window surface
+            surface = self.get_surface()
+            if surface:
+                surface.set_position(x, y)
+        except Exception as e:
+            logger.warning(f"Error updating window position: {e}")
 
     def switch_mode(self, mode):
         """Switch to specified mode."""

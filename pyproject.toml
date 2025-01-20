@@ -22,6 +22,9 @@ thermal2pro = "thermal2pro.main:main"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
+markers = [
+    "gtk: mark a test as requiring GTK (UI/display test)",
+    "unit: mark a test as a unit test",
+    "integration: mark a test as an integration test",
+    "slow: mark test as slow running"
+]
