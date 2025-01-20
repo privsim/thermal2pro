@@ -7,7 +7,8 @@ import platform
 # Use GTK 4.0
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib, Gdk, Gio
-import pkg_resources
+from importlib import resources
+from pathlib import Path
 import cv2
 import numpy as np
 from datetime import datetime
@@ -35,8 +36,11 @@ class ThermalWindow(Gtk.ApplicationWindow):
         
         # Load CSS styling
         css_provider = Gtk.CssProvider()
-        css_file = pkg_resources.resource_filename('thermal2pro.ui', 'style.css')
-        css_provider.load_from_path(css_file)
+        try:
+            css_file = Path(resources.files('thermal2pro.ui') / 'style.css')
+            css_provider.load_from_path(str(css_file))
+        except Exception as e:
+            logger.warning(f"Failed to load CSS: {e}")
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(),
             css_provider,
@@ -53,6 +57,13 @@ class ThermalWindow(Gtk.ApplicationWindow):
         self.box.set_margin_start(5)
         self.box.set_margin_end(5)
         self.set_child(self.box)
+
+        # Initialize modes first
+        self.modes = {
+            AppMode.LIVE_VIEW: LiveViewMode(self),
+            # Other modes will be added as they're implemented
+        }
+        self.current_mode = None
 
         # Camera view area
         self.drawing_area = Gtk.DrawingArea()
@@ -77,9 +88,7 @@ class ThermalWindow(Gtk.ApplicationWindow):
             button.set_has_frame(True)  # Ensure button has visible frame
             button.set_size_request(120, 50)  # Larger touch targets
             button.connect('toggled', self.on_mode_button_toggled, mode)
-            # Set CSS classes for styling
-            context = button.get_style_context()
-            context.add_class('mode-button')
+            button.add_css_class('mode-button')
             if mode == AppMode.LIVE_VIEW:  # Set initial active state
                 button.set_active(True)
             mode_bar.append(button)

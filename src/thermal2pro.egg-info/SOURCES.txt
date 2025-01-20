@@ -1,3 +1,4 @@
+MANIFEST.in
 README.md
 pyproject.toml
 src/thermal2pro/__init__.py
@@ -9,14 +10,22 @@ src/thermal2pro.egg-info/entry_points.txt
 src/thermal2pro.egg-info/requires.txt
 src/thermal2pro.egg-info/top_level.txt
 src/thermal2pro/camera/__init__.py
+src/thermal2pro/camera/mock_camera.py
 src/thermal2pro/camera/processing.py
 src/thermal2pro/storage/__init__.py
 src/thermal2pro/storage/handler.py
 src/thermal2pro/ui/__init__.py
 src/thermal2pro/ui/cairo_handler.py
+src/thermal2pro/ui/live_view.py
 src/thermal2pro/ui/window.py
+src/thermal2pro/ui/modes/__init__.py
+src/thermal2pro/ui/modes/base_mode.py
+src/thermal2pro/ui/modes/live_view_mode.py
 tests/test_cairo_handling.py
 tests/test_camera.py
 tests/test_camera_processing.py
+tests/test_integration.py
+tests/test_live_view.py
+tests/test_modes.py
 tests/test_storage.py
 tests/test_ui.py
