@@ -15,6 +15,9 @@ dependencies = [
     "PyGObject>=3.42.0",
 ]
 
+[tool.setuptools.package-data]
+thermal2pro = ["ui/style.css"]
+
 [project.scripts]
 thermal2pro = "thermal2pro.main:main"
 

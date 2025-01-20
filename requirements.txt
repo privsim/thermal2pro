@@ -1,6 +1,7 @@
-numpy>=1.26.0
+numpy>=1.26.2
 opencv-python-headless>=4.8.0
 Pillow>=10.0.0
 pycairo>=1.24.0
-PyGObject
+PyGObject>=3.42.0
 pytest
+pytest-timeout

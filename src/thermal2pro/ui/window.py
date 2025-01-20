@@ -6,7 +6,8 @@ import platform
 
 # Use GTK 4.0
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, GLib, Gdk
+from gi.repository import Gtk, GLib, Gdk, Gio
+import pkg_resources
 import cv2
 import numpy as np
 from datetime import datetime
@@ -31,6 +32,16 @@ class ThermalWindow(Gtk.ApplicationWindow):
         """
         super().__init__(application=app)
         self.set_title("P2 Pro Thermal")
+        
+        # Load CSS styling
+        css_provider = Gtk.CssProvider()
+        css_file = pkg_resources.resource_filename('thermal2pro.ui', 'style.css')
+        css_provider.load_from_path(css_file)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
         
         # Set window size before creating content
         self.set_default_size(800, 600)
@@ -234,13 +245,35 @@ class ThermalWindow(Gtk.ApplicationWindow):
 
     def close(self):
         """Close window and clean up resources."""
+        logger.info("Starting window cleanup...")
+        
+        try:
+            # Stop frame updates
+            GLib.source_remove_by_user_data(self.update_frame)
+        except Exception as e:
+            logger.warning(f"Error removing frame update source: {e}")
+        
         # Clean up modes
         for mode in self.modes.values():
-            mode.cleanup()
+            try:
+                mode.cleanup()
+            except Exception as e:
+                logger.warning(f"Error cleaning up mode {mode}: {e}")
 
         # Release camera
         if self.cap is not None:
-            self.cap.release()
+            try:
+                self.cap.release()
+                self.cap = None
+            except Exception as e:
+                logger.warning(f"Error releasing camera: {e}")
+
+        # Clear frame buffer
+        self.current_frame = None
+
+        # Run garbage collection
+        import gc
+        gc.collect()
 
         logger.info("Window resources cleaned up")
         super().close()

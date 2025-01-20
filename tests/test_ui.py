@@ -121,8 +121,43 @@ class TestWindow:
             assert test_window.current_mode == mode
             assert test_window.modes[mode].is_active
             
+            # Verify other buttons are inactive
+            for other_mode, other_button in test_window.mode_buttons.items():
+                if other_mode != mode:
+                    assert not other_button.get_active()
+            
             # Test deactivation attempt (should stay active)
             button.set_active(False)
             test_window.on_mode_button_toggled(button, mode)
             assert test_window.current_mode == mode
             assert button.get_active()  # Button should stay active
+
+    @pytest.mark.gtk
+    def test_button_visual_properties(self, test_window):
+        """Test button visual and interaction properties."""
+        for mode, button in test_window.mode_buttons.items():
+            # Check button properties
+            assert button.get_size_request() == (120, 50)  # Touch-friendly size
+            assert button.get_has_frame()  # Visual feedback enabled
+            assert 'mode-button' in button.get_style_context().list_classes()
+
+    @pytest.mark.gtk
+    def test_mode_cleanup(self, test_window):
+        """Test proper cleanup when switching modes."""
+        # Switch to each mode and verify cleanup
+        for mode in [m for m in AppMode if m in test_window.modes]:
+            old_mode = test_window.current_mode
+            old_mode_instance = test_window.modes[old_mode]
+            
+            # Switch mode
+            button = test_window.mode_buttons[mode]
+            button.set_active(True)
+            test_window.on_mode_button_toggled(button, mode)
+            
+            # Verify old mode cleaned up
+            assert not old_mode_instance.is_active
+            assert not old_mode_instance.controls_box.get_visible()
+            
+            # Verify new mode properly initialized
+            assert test_window.modes[mode].is_active
+            assert test_window.modes[mode].controls_box.get_visible()

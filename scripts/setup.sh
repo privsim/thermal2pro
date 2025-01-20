@@ -6,7 +6,20 @@ VENV_DIR="${BASE_DIR}/thermalenv"
 
 install_system_dependencies() {
     echo "Installing system dependencies..."
-    if command -v apt &> /dev/null; then
+    if [ "$(uname)" = "Darwin" ]; then
+        # macOS (Homebrew)
+        if ! command -v brew &> /dev/null; then
+            echo "Error: Homebrew not found. Please install it first."
+            exit 1
+        fi
+        brew install \
+            gtk4 \
+            gobject-introspection \
+            pygobject3 \
+            cairo \
+            pkg-config
+    elif command -v apt &> /dev/null; then
+        # Debian/Ubuntu
         sudo apt update
         # Install GTK4 as required by project
         sudo apt install -y \
@@ -21,17 +34,20 @@ install_system_dependencies() {
             libgtk-4-dev \
             xvfb
     else
-        echo "Warning: apt not found. Please install required dependencies manually:"
-        echo "- python3-gi"
-        echo "- python3-gi-cairo"
-        echo "- gir1.2-gtk-4.0"
-        echo "- libgtk-4-dev"
-        echo "- xvfb"
-        echo "- libgirepository1.0-dev"
-        echo "- gcc"
-        echo "- libcairo2-dev"
-        echo "- pkg-config"
-        echo "- python3-dev"
+        echo "Warning: Unsupported package manager. Please install required dependencies manually:"
+        echo "For macOS:"
+        echo "  brew install gtk4 gobject-introspection pygobject3 cairo pkg-config"
+        echo "For Linux:"
+        echo "  - python3-gi"
+        echo "  - python3-gi-cairo"
+        echo "  - gir1.2-gtk-4.0"
+        echo "  - libgirepository1.0-dev"
+        echo "  - libgtk-4-dev"
+        echo "  - xvfb"
+        echo "  - gcc"
+        echo "  - libcairo2-dev"
+        echo "  - pkg-config"
+        echo "  - python3-dev"
     fi
 }
 
@@ -86,7 +102,11 @@ EOL
     python3 -m pip install -r requirements.txt
     
     # Install in development mode
+    echo "Installing in development mode..."
     python3 -m pip install -e .
+    
+    echo "Running test verification..."
+    python3 -m pytest tests/test_ui.py -v
 }
 
 # Main execution
