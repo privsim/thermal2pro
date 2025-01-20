@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class ThermalWindow(Gtk.ApplicationWindow):
     """Main application window."""
     
-    def __init__(self, app):
+    def __init__(self, app, use_mock_camera=False):
         """Initialize window.
         
         Args:
@@ -79,18 +79,22 @@ class ThermalWindow(Gtk.ApplicationWindow):
 
         # Initialize camera
         self.cap = None
-        try:
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
-                raise RuntimeError("Failed to open camera")
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            self.cap.set(cv2.CAP_PROP_FPS, 30)
-            
-        except Exception as e:
-            logger.warning(f"Camera initialization failed: {e}, falling back to mock camera")
+        if use_mock_camera:
+            logger.info("Using mock camera as requested")
             self.cap = MockThermalCamera()
+        else:
+            try:
+                self.cap = cv2.VideoCapture(0)
+                if not self.cap.isOpened():
+                    raise RuntimeError("Failed to open camera")
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 192)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                self.cap.set(cv2.CAP_PROP_FPS, 30)
+                
+            except Exception as e:
+                logger.warning(f"Camera initialization failed: {e}, falling back to mock camera")
+                self.cap = MockThermalCamera()
 
         # Initialize frame buffer
         self.current_frame = None
