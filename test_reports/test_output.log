@@ -60,4 +60,4 @@ tests/test_ui.py::TestWindow::test_error_handling PASSED                 [ 96%]
 tests/test_ui.py::TestWindow::test_resize_handling PASSED                [ 98%]
 tests/test_ui.py::TestWindow::test_mode_button_interaction PASSED        [100%]
 
-============================== 54 passed in 2.28s ==============================
+============================== 54 passed in 2.35s ==============================

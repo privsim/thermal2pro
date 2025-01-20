@@ -50,10 +50,8 @@ class TestWindow:
         frame = np.zeros((192, 256), dtype=np.uint8)  # Grayscale frame
         frame[50:150, 50:150] = 255  # Add white square
         
-        # Replace camera with MockThermalCamera instance
-        mock_camera = MockThermalCamera()
-        mock_camera.read = MagicMock(return_value=(True, frame))
-        test_window.cap = mock_camera
+        # Mock camera read
+        test_window.cap.read = MagicMock(return_value=(True, frame))
         
         # Process frame
         assert test_window.update_frame()
@@ -63,16 +61,14 @@ class TestWindow:
     @pytest.mark.gtk
     def test_window_cleanup(self, test_window):
         """Test window cleanup."""
-        # Use MockThermalCamera instead of generic MagicMock
-        mock_camera = MockThermalCamera()
-        mock_camera.release = MagicMock()
-        test_window.cap = mock_camera
+        # Mock camera
+        test_window.cap = MagicMock()
         
         # Trigger cleanup
         test_window.close()
         
         # Verify camera released
-        mock_camera.release.assert_called_once()
+        test_window.cap.release.assert_called_once()
 
     @pytest.mark.gtk
     def test_drawing_area(self, test_window):
@@ -86,10 +82,8 @@ class TestWindow:
     @pytest.mark.gtk
     def test_error_handling(self, test_window):
         """Test error handling in frame processing."""
-        # Replace with MockThermalCamera
-        mock_camera = MockThermalCamera()
-        mock_camera.read = MagicMock(return_value=(False, None))
-        test_window.cap = mock_camera
+        # Make camera read fail
+        test_window.cap.read = MagicMock(return_value=(False, None))
         
         # Should handle error gracefully
         assert test_window.update_frame()  # Returns True to continue updates
